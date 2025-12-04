@@ -85,7 +85,7 @@ function renderEditor() {
         const groupDiv = document.createElement('div');
         groupDiv.className = 'ball-group';
         
-        // --- NEW LOGIC: Show Plus button only if single option ---
+        // Show Plus button only if single option
         const isSingle = stepOptions.length === 1;
         const plusBtn = isSingle 
             ? `<button class="btn-add-opt" onclick="window.handleAddOption(${stepIndex})" title="Add Variation">+</button>` 
@@ -96,7 +96,6 @@ function renderEditor() {
                 <span>Ball ${stepIndex + 1}</span>
                 ${plusBtn}
             </div>`;
-        // ---------------------------------------------------------
 
         stepOptions.forEach((ballParams, optIndex) => {
             const optDiv = document.createElement('div');
@@ -159,18 +158,28 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     tempDrillData[stepIdx][optIdx][paramIdx] = val;
 };
 
-// --- NEW HANDLER: Add Option to Single Ball ---
+// Handler: Add Option to Single Ball (The "+" button)
 window.handleAddOption = (stepIndex) => {
-    // Clone the existing single option (index 0) to use as a base
     const baseOption = [...tempDrillData[stepIndex][0]];
-    // Push it as a new alternative
     tempDrillData[stepIndex].push(baseOption);
     renderEditor();
 };
 
+// Handler: Conditional Clone
 window.handleCloneBall = (stepIdx, optIdx) => {
+    // 1. Copy the configuration
     const ballConfig = [...tempDrillData[stepIdx][optIdx]];
-    tempDrillData[stepIdx].splice(optIdx + 1, 0, ballConfig);
+    
+    // 2. Check: Is this a Single Ball or an Option Ball?
+    if (tempDrillData[stepIdx].length > 1) {
+        // CASE: HAS OPTIONS -> Clone creates NEW OPTION (inserted next to current)
+        tempDrillData[stepIdx].splice(optIdx + 1, 0, ballConfig);
+    } else {
+        // CASE: SINGLE BALL -> Clone creates NEW SEQUENTIAL STEP
+        const newStep = [ballConfig];
+        tempDrillData.splice(stepIdx + 1, 0, newStep);
+    }
+    
     renderEditor();
 };
 
