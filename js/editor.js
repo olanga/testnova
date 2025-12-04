@@ -152,10 +152,14 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     tempDrillData[stepIdx][optIdx][paramIdx] = val;
 };
 
+// --- UPDATED CLONE LOGIC ---
 window.handleCloneBall = (stepIdx, optIdx) => {
+    // 1. Copy the configuration of the clicked option
     const ballConfig = [...tempDrillData[stepIdx][optIdx]];
-    const newStep = [ballConfig]; 
-    tempDrillData.splice(stepIdx + 1, 0, newStep);
+    
+    // 2. Add it as a NEW OPTION to the SAME step (same Ball number)
+    tempDrillData[stepIdx].push(ballConfig);
+    
     renderEditor();
 };
 
