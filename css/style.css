@@ -503,16 +503,33 @@ input[type="number"]:focus { outline: none; }
     overflow: hidden; 
 }
 
+/* UPDATED MODAL HEADER - Includes Truncation Support */
 .modal-header { 
     display: flex; 
-    justify-content: space-between; 
     align-items: center; 
+    gap: 15px; 
     margin-bottom: 15px; 
     padding-bottom: 10px; 
-    border-bottom: 1px solid var(--border); 
+    border-bottom: 1px solid var(--border);
+    width: 100%;
 }
 
-.modal-title { font-weight: 700; color: var(--text); font-size: 1.1rem; }
+.modal-title { 
+    font-weight: 700; 
+    color: var(--text); 
+    font-size: 1.1rem; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    flex: 1;       
+    min-width: 0;  
+    text-align: left;
+}
+
+.modal-header > div:not(.modal-title) {
+    flex-shrink: 0; 
+}
+
 .modal-close { font-size: 1.5rem; color: var(--text-light); cursor: pointer; line-height: 1; }
 .modal-body { overflow-y: auto; flex: 1; padding-right: 5px; }
 
@@ -580,7 +597,7 @@ input[type="number"]:focus { outline: none; }
 .btn-save { background: var(--primary); color: white; }
 .btn-cancel { background: var(--card-bg); color: var(--text); }
 
-/* --- NEW EDITOR ACTION BUTTONS (Test, Clone, Delete) --- */
+/* --- EDITOR ACTION BUTTONS (Test, Clone, Delete) --- */
 .card-actions { 
     display: flex; 
     gap: 8px; 
