@@ -27,7 +27,7 @@ export function openEditor(key) {
         }
         
         titleEl.textContent = `Edit: ${displayName}`;
-        titleEl.title = displayName; // Tooltip for very long names
+        titleEl.title = displayName;
     }
 
     // --- 2. LOAD DATA ---
@@ -74,7 +74,6 @@ export function saveDrillChanges() {
     closeEditor();
     showToast(`Saved Level ${selectedLevel}`);
     
-    // Notify main to refresh UI (e.g. "R" marks)
     document.dispatchEvent(new CustomEvent('drills-updated'));
 }
 
@@ -152,13 +151,14 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     tempDrillData[stepIdx][optIdx][paramIdx] = val;
 };
 
-// --- UPDATED CLONE LOGIC ---
+// --- UPDATED CLONE LOGIC (Inserts NEXT to current option) ---
 window.handleCloneBall = (stepIdx, optIdx) => {
     // 1. Copy the configuration of the clicked option
     const ballConfig = [...tempDrillData[stepIdx][optIdx]];
     
-    // 2. Add it as a NEW OPTION to the SAME step (same Ball number)
-    tempDrillData[stepIdx].push(ballConfig);
+    // 2. Insert copy immediately AFTER the current index (optIdx + 1)
+    //    splice(index, deleteCount, itemToAdd)
+    tempDrillData[stepIdx].splice(optIdx + 1, 0, ballConfig);
     
     renderEditor();
 };
