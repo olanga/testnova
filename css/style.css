@@ -448,6 +448,54 @@ input[type="number"]:focus { outline: none; }
     padding: 0 5px; 
 }
 
+/* --- SWAP BUTTON (Between Balls) --- */
+.swap-zone {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2px 0;
+    margin: -8px 0 8px 0; /* Pulls elements closer to look connected */
+    position: relative;
+    z-index: 5;
+}
+
+/* Optional: A line behind the button to connect the balls visually */
+.swap-zone::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+    transform: translateX(-50%);
+    z-index: -1;
+}
+
+.btn-swap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-light);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: all 0.2s ease;
+}
+
+.btn-swap:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    transform: scale(1.1);
+}
+
 .checkbox-wrapper { display: flex; align-items: center; gap: 6px; }
 #stats-display { font-variant-numeric: tabular-nums; }
 
