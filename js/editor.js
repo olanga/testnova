@@ -1,9 +1,7 @@
 import { currentDrills, selectedLevel, saveDrillsToStorage } from './state.js';
 import { RANGE_CONFIG } from './constants.js';
-// CHANGE 1: Import bleState directly from bluetooth.js
 import { sendPacket, packBall, bleState } from './bluetooth.js';
 import { showToast, clamp } from './utils.js';
-// CHANGE 2: Removed import from main.js to fix circular dependency
 
 // --- Local State ---
 let tempDrillData = null;
@@ -14,6 +12,25 @@ let editingDrillKey = null;
 export function openEditor(key) {
     editingDrillKey = key;
     
+    // --- 1. SET DRILL NAME IN TITLE ---
+    const titleEl = document.querySelector('.modal-title');
+    if (titleEl) {
+        let displayName = key;
+        
+        // Formatting Logic
+        if (key.startsWith('cust_')) {
+            // Custom: "cust_A_My_Drill" -> "My Drill"
+            displayName = key.replace(/^cust_[A-C]_/, '').replace(/_/g, ' ');
+        } else {
+            // Built-in: "push(f)" -> "Push(f)"
+            displayName = key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        
+        titleEl.textContent = `Edit: ${displayName}`;
+        titleEl.title = displayName; // Tooltip for very long names
+    }
+
+    // --- 2. LOAD DATA ---
     const chk = document.getElementById('chk-drill-random');
     if (chk) chk.checked = !!currentDrills[key].random;
 
@@ -39,6 +56,7 @@ export function saveDrillChanges() {
     const chk = document.getElementById('chk-drill-random');
     if (chk) currentDrills[editingDrillKey].random = chk.checked;
 
+    // Sanitize Data
     tempDrillData.forEach(step => {
         step.forEach(ball => {
             ball[0] = clamp(ball[0], 400, 7500); 
@@ -56,6 +74,7 @@ export function saveDrillChanges() {
     closeEditor();
     showToast(`Saved Level ${selectedLevel}`);
     
+    // Notify main to refresh UI (e.g. "R" marks)
     document.dispatchEvent(new CustomEvent('drills-updated'));
 }
 
@@ -65,7 +84,6 @@ function renderEditor() {
     const modalBody = document.getElementById('editor-body');
     modalBody.innerHTML = '';
     
-    // CHANGE 3: Check connection using bleState
     const isConnected = bleState.isConnected;
 
     tempDrillData.forEach((stepOptions, stepIndex) => {
@@ -129,10 +147,7 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     
     let val = parseFloat(value);
     if (isNaN(val)) return;
-
-    if (paramIdx !== 3) {
-        val = parseInt(value);
-    }
+    if (paramIdx !== 3) val = parseInt(value); // Only Drop (idx 3) is float
     
     tempDrillData[stepIdx][optIdx][paramIdx] = val;
 };
@@ -149,24 +164,21 @@ window.handleDeleteBall = (stepIdx, optIdx) => {
         showToast("Cannot delete the last ball");
         return;
     }
-
     tempDrillData[stepIdx].splice(optIdx, 1);
-
     if (tempDrillData[stepIdx].length === 0) {
         tempDrillData.splice(stepIdx, 1);
     }
-
     renderEditor();
 };
 
 window.handleTestBall = async (stepIdx, optIdx) => {
-    // CHANGE 4: Use bleState here as well
     if (!bleState.isConnected) {
         showToast("Device not connected");
         return;
     }
     
     const d = tempDrillData[stepIdx][optIdx];
+    // Pack with default freq(50) and reps(1) for testing
     const ballData = packBall(d[0], d[1], d[2], d[3], 50, 1);
     
     try {
