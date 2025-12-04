@@ -23,21 +23,25 @@ import {
     saveDrillChanges 
 } from './editor.js';
 
+// --- FIXED: Removed showToast from here ---
 import { 
     renderDrillButtons, 
     updateDrillButtonStates, 
     setTheme, 
     toggleMenu, 
     switchTab, 
-    updateStatsUI,
-    showToast 
+    updateStatsUI
 } from './ui.js';
+
+// --- NEW: Import showToast from its true home (utils.js) ---
+import { showToast } from './utils.js';
 
 import { 
     startDrillSequence, 
     stopRun, 
     togglePause 
 } from './runner.js';
+
 
 // --- Initialization ---
 
