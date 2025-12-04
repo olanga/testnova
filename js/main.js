@@ -23,7 +23,6 @@ import {
     saveDrillChanges 
 } from './editor.js';
 
-// --- FIXED: Removed showToast from here ---
 import { 
     renderDrillButtons, 
     updateDrillButtonStates, 
@@ -31,9 +30,10 @@ import {
     toggleMenu, 
     switchTab, 
     updateStatsUI
+    // showToast was removed from here because it's not exported by ui.js
 } from './ui.js';
 
-// --- NEW: Import showToast from its true home (utils.js) ---
+// --- NEW IMPORT LINE ---
 import { showToast } from './utils.js';
 
 import { 
@@ -41,7 +41,6 @@ import {
     stopRun, 
     togglePause 
 } from './runner.js';
-
 
 // --- Initialization ---
 
@@ -115,7 +114,6 @@ function setupEventListeners() {
         // Re-enable/disable editor test buttons if open
         const editorModal = document.getElementById('editor-modal');
         if(editorModal && editorModal.classList.contains('open')) {
-            // Optional: trigger editor refresh or rely on individual button logic
             const testBtns = document.querySelectorAll('.btn-act-test');
             testBtns.forEach(b => b.disabled = !bleState.isConnected);
         }
@@ -123,7 +121,6 @@ function setupEventListeners() {
 }
 
 // --- Window Binding for HTML Compatibility ---
-// This exposes module functions to the global scope so onclick="..." works.
 
 // 1. UI Actions
 window.toggleMenu = toggleMenu;
@@ -133,14 +130,12 @@ window.switchTab = switchTab;
 // 2. State/Settings Actions
 window.setLevel = (lvl, btn) => {
     setLevel(lvl);
-    // UI Update for Level Dots
     document.querySelectorAll('.lvl-dot').forEach(d => d.classList.remove('active'));
     if(btn) btn.classList.add('active');
 };
 
 window.setMode = (mode, btn) => {
     setMode(mode);
-    // UI Update for Mode Switch
     document.querySelectorAll('.mode-option').forEach(d => d.classList.remove('active'));
     if(btn) btn.classList.add('active');
     
@@ -170,7 +165,7 @@ window.handleCSVUpload = (event) => {
         const success = importCustomDrills(e.target.result);
         if(success) {
             renderDrillButtons();
-            toggleMenu(); // Close menu
+            toggleMenu(); 
         }
     };
     reader.readAsText(file);
@@ -178,7 +173,7 @@ window.handleCSVUpload = (event) => {
 };
 
 // 4. Editor Actions
-window.openEditor = openEditor; // (Called via long-press logic usually, but exposed just in case)
+window.openEditor = openEditor;
 window.closeEditor = closeEditor;
 window.saveDrillChanges = saveDrillChanges;
 
@@ -187,18 +182,14 @@ window.togglePause = togglePause;
 window.stopRun = stopRun;
 
 // --- Helper: Drill Interaction Glue ---
-// This bridges the UI button clicks to the Runner logic
 window.handleDrillClick = (key, btn) => {
-    // Check connection via imported state
     if (!bleState.isConnected) {
         showToast("Device not connected");
         return;
     }
 
-    // UI Updates
     document.querySelectorAll('.btn-drill').forEach(b => b.classList.remove('running'));
     btn.classList.add('running');
 
-    // Start Logic
     startDrillSequence(key);
 };
