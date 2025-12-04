@@ -17,12 +17,9 @@ export function openEditor(key) {
     if (titleEl) {
         let displayName = key;
         
-        // Formatting Logic
         if (key.startsWith('cust_')) {
-            // Custom: "cust_A_My_Drill" -> "My Drill"
             displayName = key.replace(/^cust_[A-C]_/, '').replace(/_/g, ' ');
         } else {
-            // Built-in: "push(f)" -> "Push(f)"
             displayName = key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         }
         
@@ -56,7 +53,6 @@ export function saveDrillChanges() {
     const chk = document.getElementById('chk-drill-random');
     if (chk) currentDrills[editingDrillKey].random = chk.checked;
 
-    // Sanitize Data
     tempDrillData.forEach(step => {
         step.forEach(ball => {
             ball[0] = clamp(ball[0], 400, 7500); 
@@ -88,7 +84,19 @@ function renderEditor() {
     tempDrillData.forEach((stepOptions, stepIndex) => {
         const groupDiv = document.createElement('div');
         groupDiv.className = 'ball-group';
-        groupDiv.innerHTML = `<div class="group-title">Ball ${stepIndex + 1}</div>`;
+        
+        // --- NEW LOGIC: Show Plus button only if single option ---
+        const isSingle = stepOptions.length === 1;
+        const plusBtn = isSingle 
+            ? `<button class="btn-add-opt" onclick="window.handleAddOption(${stepIndex})" title="Add Variation">+</button>` 
+            : '';
+
+        groupDiv.innerHTML = `
+            <div class="group-title">
+                <span>Ball ${stepIndex + 1}</span>
+                ${plusBtn}
+            </div>`;
+        // ---------------------------------------------------------
 
         stepOptions.forEach((ballParams, optIndex) => {
             const optDiv = document.createElement('div');
@@ -146,20 +154,23 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     
     let val = parseFloat(value);
     if (isNaN(val)) return;
-    if (paramIdx !== 3) val = parseInt(value); // Only Drop (idx 3) is float
+    if (paramIdx !== 3) val = parseInt(value);
     
     tempDrillData[stepIdx][optIdx][paramIdx] = val;
 };
 
-// --- UPDATED CLONE LOGIC (Inserts NEXT to current option) ---
+// --- NEW HANDLER: Add Option to Single Ball ---
+window.handleAddOption = (stepIndex) => {
+    // Clone the existing single option (index 0) to use as a base
+    const baseOption = [...tempDrillData[stepIndex][0]];
+    // Push it as a new alternative
+    tempDrillData[stepIndex].push(baseOption);
+    renderEditor();
+};
+
 window.handleCloneBall = (stepIdx, optIdx) => {
-    // 1. Copy the configuration of the clicked option
     const ballConfig = [...tempDrillData[stepIdx][optIdx]];
-    
-    // 2. Insert copy immediately AFTER the current index (optIdx + 1)
-    //    splice(index, deleteCount, itemToAdd)
     tempDrillData[stepIdx].splice(optIdx + 1, 0, ballConfig);
-    
     renderEditor();
 };
 
@@ -182,7 +193,6 @@ window.handleTestBall = async (stepIdx, optIdx) => {
     }
     
     const d = tempDrillData[stepIdx][optIdx];
-    // Pack with default freq(50) and reps(1) for testing
     const ballData = packBall(d[0], d[1], d[2], d[3], 50, 1);
     
     try {
