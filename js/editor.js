@@ -1,4 +1,4 @@
-import { currentDrills, selectedLevel, saveDrillsToStorage } from './state.js';
+import { currentDrills, userCustomDrills, selectedLevel, saveDrillsToStorage } from './state.js';
 import { RANGE_CONFIG } from './constants.js';
 import { sendPacket, packBall, bleState } from './bluetooth.js';
 import { showToast, clamp } from './utils.js';
@@ -15,19 +15,25 @@ export function openEditor(key) {
     // --- 1. SET DRILL NAME IN TITLE ---
     const titleEl = document.querySelector('.modal-title');
     if (titleEl) {
-        let displayName = key;
+        updateTitleDisplay(titleEl, key);
         
-        // Formatting Logic
-        if (key.startsWith('cust_')) {
-            // Custom: "cust_A_My_Drill" -> "My Drill"
-            displayName = key.replace(/^cust_[A-C]_/, '').replace(/_/g, ' ');
-        } else {
-            // Built-in: "push(f)" -> "Push(f)"
-            displayName = key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        }
+        // --- ADD RENAME LISTENER (Long Press) ---
+        let pressTimer;
         
-        titleEl.textContent = `Edit: ${displayName}`;
-        titleEl.title = displayName;
+        const startPress = (e) => {
+            pressTimer = setTimeout(() => handleRename(titleEl), 800);
+        };
+        
+        const endPress = () => clearTimeout(pressTimer);
+
+        titleEl.onmousedown = startPress;
+        titleEl.ontouchstart = startPress;
+        titleEl.onmouseup = endPress;
+        titleEl.onmouseleave = endPress;
+        titleEl.ontouchend = endPress;
+        
+        // Prevent default context menu on long press
+        titleEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
     }
 
     // --- 2. LOAD DATA ---
@@ -80,6 +86,95 @@ export function saveDrillChanges() {
     document.dispatchEvent(new CustomEvent('drills-updated'));
 }
 
+// --- Renaming Logic ---
+
+function handleRename(titleEl) {
+    // Only allow renaming Custom drills (starting with cust_)
+    if (!editingDrillKey || !editingDrillKey.startsWith('cust_')) {
+        showToast("Cannot rename factory drills");
+        return;
+    }
+
+    const currentDisplayName = titleEl.title;
+    // Updated prompt text to include Space
+    const newName = prompt("Rename Drill (Max 32 chars)\nAllowed: a-z A-Z 0-9 . - # [ ] > < + ) ( Space", currentDisplayName);
+
+    if (!newName || newName === currentDisplayName) return;
+
+    // 1. Validation
+    if (newName.length > 32) { 
+        showToast("Name too long (Max 32)");
+        return;
+    }
+    
+    // Allowed: a-z, A-Z, 0-9, . - # [ ] > < + ) ( Space
+    const validRegex = /^[a-zA-Z0-9.\-#\[\]><\+\)\( ]+$/;
+    
+    if (!validRegex.test(newName)) {
+        showToast("Invalid characters");
+        return;
+    }
+
+    // 2. Identify Category
+    const parts = editingDrillKey.split('_'); // e.g. ["cust", "A", "Name"]
+    if (parts.length < 3) return;
+    
+    const catChar = parts[1]; // "A", "B", or "C"
+    const catListKey = `custom-${catChar.toLowerCase()}`;
+    const list = userCustomDrills[catListKey];
+    
+    if (!list) return;
+
+    // 3. Check Uniqueness & Generate Key
+    const newKey = `cust_${catChar}_${newName}`;
+    
+    if (currentDrills[newKey] && newKey !== editingDrillKey) {
+        showToast("Name already exists");
+        return;
+    }
+
+    // 4. Update Data Structures
+    // A. Update the list entry
+    const entry = list.find(d => d.key === editingDrillKey);
+    if (entry) {
+        entry.name = newName;
+        entry.key = newKey;
+    }
+
+    // B. Move Drill Data to new Key
+    currentDrills[newKey] = currentDrills[editingDrillKey];
+    delete currentDrills[editingDrillKey];
+
+    // C. Persist Changes
+    editingDrillKey = newKey;
+    localStorage.setItem('custom_data', JSON.stringify(userCustomDrills)); // Save List
+    saveDrillsToStorage(); // Save Drill Data
+
+    // D. Update UI
+    updateTitleDisplay(titleEl, newKey);
+    showToast("Renamed Successfully");
+    document.dispatchEvent(new CustomEvent('drills-updated'));
+}
+
+function updateTitleDisplay(el, key) {
+    let displayName = key;
+    if (key.startsWith('cust_')) {
+        // Find name in userCustomDrills or fallback to parsing key
+        const parts = key.split('_');
+        if (parts.length >= 3) {
+           // Try to find the real name in the list (handles underscores vs spaces if relevant)
+           const catKey = `custom-${parts[1].toLowerCase()}`;
+           const entry = userCustomDrills[catKey]?.find(d => d.key === key);
+           displayName = entry ? entry.name : key.replace(/^cust_[A-C]_/, '');
+        }
+    } else {
+        displayName = key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+    
+    el.textContent = `Edit: ${displayName}`;
+    el.title = displayName;
+}
+
 // --- Internal Rendering Logic ---
 
 function renderEditor() {
@@ -94,7 +189,6 @@ function renderEditor() {
         if (stepIndex > 0) {
             const swapDiv = document.createElement('div');
             swapDiv.className = 'swap-zone';
-            // Calls handleSwapSteps with (previousIndex, currentIndex)
             swapDiv.innerHTML = `<button class="btn-swap" onclick="window.handleSwapSteps(${stepIndex - 1}, ${stepIndex})" title="Swap Order">⇅</button>`;
             modalBody.appendChild(swapDiv);
         }
@@ -103,7 +197,6 @@ function renderEditor() {
         const groupDiv = document.createElement('div');
         groupDiv.className = 'ball-group';
         
-        // Only show "+" button if this ball has no variations (single option)
         const isSingle = stepOptions.length === 1;
         const plusBtn = isSingle 
             ? `<button class="btn-add-opt" onclick="window.handleAddOption(${stepIndex})" title="Add Variation">+</button>` 
@@ -139,7 +232,6 @@ function renderEditor() {
             });
             gridHtml += '</div>';
 
-            // Disable delete if it's the absolute last ball in the drill
             const isLastBall = tempDrillData.length === 1 && stepOptions.length === 1;
 
             const actionsHtml = `
@@ -157,7 +249,6 @@ function renderEditor() {
                 </div>
             `;
 
-            // Label for Option 1, Option 2, etc. (only if multiple)
             const label = stepOptions.length > 1 ? `<span class="option-label">Option ${optIndex + 1}</span>` : '';
 
             optDiv.innerHTML = label + gridHtml + actionsHtml;
@@ -174,38 +265,31 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     if (!tempDrillData) return;
     let val = parseFloat(value);
     if (isNaN(val)) return;
-    if (paramIdx !== 3) val = parseInt(value); // Only Drop (idx 3) is float
+    if (paramIdx !== 3) val = parseInt(value); 
     tempDrillData[stepIdx][optIdx][paramIdx] = val;
 };
 
-// Swap Steps (reorders the drill sequence)
 window.handleSwapSteps = (idxA, idxB) => {
     if (!tempDrillData) return;
     [tempDrillData[idxA], tempDrillData[idxB]] = [tempDrillData[idxB], tempDrillData[idxA]];
     renderEditor(); 
 };
 
-// Add Variation (The "+" button logic)
 window.handleAddOption = (stepIndex) => {
-    // Clone base option and add as sibling
     const baseOption = [...tempDrillData[stepIndex][0]];
     tempDrillData[stepIndex].push(baseOption);
     renderEditor();
 };
 
-// Smart Clone Logic
 window.handleCloneBall = (stepIdx, optIdx) => {
     const ballConfig = [...tempDrillData[stepIdx][optIdx]];
     
     if (tempDrillData[stepIdx].length > 1) {
-        // Case: Cloning inside a group -> Add new Option
         tempDrillData[stepIdx].splice(optIdx + 1, 0, ballConfig);
     } else {
-        // Case: Cloning a single ball -> Add new Step (Ball)
         const newStep = [ballConfig];
         tempDrillData.splice(stepIdx + 1, 0, newStep);
     }
-    
     renderEditor();
 };
 
@@ -214,17 +298,13 @@ window.handleDeleteBall = (stepIdx, optIdx) => {
         showToast("Cannot delete the last ball");
         return;
     }
-    // Remove option
     tempDrillData[stepIdx].splice(optIdx, 1);
-    
-    // If step is empty, remove step
     if (tempDrillData[stepIdx].length === 0) {
         tempDrillData.splice(stepIdx, 1);
     }
     renderEditor();
 };
 
-// Fixed Test Function
 window.handleTestBall = async (stepIdx, optIdx) => {
     if (!bleState.isConnected) {
         showToast("Device not connected");
@@ -233,27 +313,24 @@ window.handleTestBall = async (stepIdx, optIdx) => {
     
     const d = tempDrillData[stepIdx][optIdx];
     
-    // Create the ball data (24 bytes)
-    // Uses d[4] (Freq) from screen, forces Reps to 1
+    // Construct Packet manually (Protocol Header + Ball Data)
     const ballData = packBall(d[0], d[1], d[2], d[3], d[4], 1); 
     
-    // Construct the Protocol Header + Ball Data manually (31 bytes total)
-    const buffer = new ArrayBuffer(7 + 24);
+    const buffer = new ArrayBuffer(31); 
     const view = new DataView(buffer);
     
-    // Protocol Header
+    // Header
     view.setUint8(0, 0x81); 
-    view.setUint16(1, 4 + 24, true); // Payload length: 28
+    view.setUint16(1, 28, true); // Length (4 + 24)
     view.setUint8(3, 1); 
     view.setUint16(4, 1, true); 
     view.setUint8(6, 0);
     
-    // Insert Ball Data
-    const packet = new Uint8Array(buffer);
-    packet.set(ballData, 7);
+    // Payload
+    new Uint8Array(buffer).set(ballData, 7);
     
     try {
-        await sendPacket(packet);
+        await sendPacket(new Uint8Array(buffer));
         showToast("Test Ball Fired");
     } catch (e) {
         console.error(e);
