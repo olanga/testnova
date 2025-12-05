@@ -224,17 +224,36 @@ window.handleDeleteBall = (stepIdx, optIdx) => {
     renderEditor();
 };
 
+// Fixed Test Function
 window.handleTestBall = async (stepIdx, optIdx) => {
     if (!bleState.isConnected) {
         showToast("Device not connected");
         return;
     }
+    
     const d = tempDrillData[stepIdx][optIdx];
-    // Pack with default freq(50) and reps(1) just for testing single ball
-    const ballData = packBall(d[0], d[1], d[2], d[3], 50, 1);
+    
+    // Create the ball data (24 bytes)
+    // Uses d[4] (Freq) from screen, forces Reps to 1
+    const ballData = packBall(d[0], d[1], d[2], d[3], d[4], 1); 
+    
+    // Construct the Protocol Header + Ball Data manually (31 bytes total)
+    const buffer = new ArrayBuffer(7 + 24);
+    const view = new DataView(buffer);
+    
+    // Protocol Header
+    view.setUint8(0, 0x81); 
+    view.setUint16(1, 4 + 24, true); // Payload length: 28
+    view.setUint8(3, 1); 
+    view.setUint16(4, 1, true); 
+    view.setUint8(6, 0);
+    
+    // Insert Ball Data
+    const packet = new Uint8Array(buffer);
+    packet.set(ballData, 7);
     
     try {
-        await sendPacket([ballData]);
+        await sendPacket(packet);
         showToast("Test Ball Fired");
     } catch (e) {
         console.error(e);
