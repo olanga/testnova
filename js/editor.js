@@ -17,22 +17,38 @@ export function openEditor(key) {
     if (titleEl) {
         updateTitleDisplay(titleEl, key);
         
-        // --- ADD RENAME LISTENER (Long Press) ---
+        // --- ADD RENAME LISTENER (Robust Mobile Support) ---
+        // 1. Disable native text selection to prevent conflict
+        titleEl.style.userSelect = 'none';
+        titleEl.style.webkitUserSelect = 'none';
+        titleEl.style.webkitTouchCallout = 'none'; // iOS disable callout
+
         let pressTimer;
         
+        const cancelPress = () => clearTimeout(pressTimer);
+
         const startPress = (e) => {
+            // Prevent default browser actions (text select, magnifier, etc.)
+            // strictly on touch events to ensure the timer holds.
+            if (e.type === 'touchstart') {
+                e.preventDefault(); 
+            }
+            
+            cancelPress();
             pressTimer = setTimeout(() => handleRename(titleEl), 800);
         };
-        
-        const endPress = () => clearTimeout(pressTimer);
 
+        // Start Events
         titleEl.onmousedown = startPress;
         titleEl.ontouchstart = startPress;
-        titleEl.onmouseup = endPress;
-        titleEl.onmouseleave = endPress;
-        titleEl.ontouchend = endPress;
         
-        // Prevent default context menu on long press
+        // End/Cancel Events
+        titleEl.onmouseup = cancelPress;
+        titleEl.onmouseleave = cancelPress;
+        titleEl.ontouchend = cancelPress;
+        titleEl.ontouchcancel = cancelPress; // Handle interruptions (alerts, etc)
+        titleEl.ontouchmove = cancelPress;   // Cancel if user tries to scroll
+        
         titleEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
     }
 
@@ -96,7 +112,6 @@ function handleRename(titleEl) {
     }
 
     const currentDisplayName = titleEl.title;
-    // Updated prompt text to include Space
     const newName = prompt("Rename Drill (Max 32 chars)\nAllowed: a-z A-Z 0-9 . - # [ ] > < + ) ( Space", currentDisplayName);
 
     if (!newName || newName === currentDisplayName) return;
