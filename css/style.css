@@ -674,6 +674,18 @@ input[type="number"]:focus { outline: none; }
 .btn-save { background: var(--primary); color: white; }
 .btn-cancel { background: var(--card-bg); color: var(--text); }
 
+/* --- NEW COMBO TEST BUTTON --- */
+.btn-test-combo { 
+    background: #6c5ce7; 
+    color: white; 
+    flex: 1.2; /* Slightly larger to stand out */
+}
+[data-theme="ocean"] .btn-test-combo { background: #6c5ce7; }
+[data-theme="forest"] .btn-test-combo { background: #6c5ce7; }
+[data-theme="night"] .btn-test-combo { background: #a29bfe; color: #2d3436; }
+.btn-test-combo:hover { opacity: 0.9; transform: scale(1.02); transition: transform 0.1s; }
+
+
 /* --- EDITOR ACTION BUTTONS (Test, Clone, Delete) --- */
 .card-actions { 
     display: flex; 

@@ -334,3 +334,53 @@ window.handleTestBall = async (stepIdx, optIdx) => {
         showToast("Test Failed");
     }
 };
+
+window.handleTestCombo = async () => {
+    if (!bleState.isConnected) {
+        showToast("Device not connected");
+        return;
+    }
+
+    if (!tempDrillData || tempDrillData.length === 0) return;
+
+    // Collect 1 option per step, ensuring Reps = 1
+    const balls = [];
+    
+    tempDrillData.forEach(stepOptions => {
+        // Use the first option for deterministic testing (index 0)
+        // or random if preferred, but usually Editor tests what you see first.
+        const d = stepOptions[0]; 
+        
+        // params: top, bot, hgt, drop, freq, REPS=1
+        balls.push(packBall(d[0], d[1], d[2], d[3], d[4], 1));
+    });
+
+    // Construct Full Sequence Packet
+    // Header (7) + Payload (balls * 24)
+    const totalLen = 7 + (balls.length * 24);
+    const buffer = new ArrayBuffer(totalLen);
+    const view = new DataView(buffer);
+    const uint8 = new Uint8Array(buffer);
+
+    // Protocol Header
+    view.setUint8(0, 0x81); 
+    view.setUint16(1, 4 + (balls.length * 24), true); // Payload length
+    view.setUint8(3, 1); 
+    view.setUint16(4, 1, true); 
+    view.setUint8(6, 0);
+
+    // Append Balls
+    let offset = 7;
+    balls.forEach(b => {
+        uint8.set(b, offset);
+        offset += 24;
+    });
+
+    try {
+        await sendPacket(uint8);
+        showToast("Testing Full Sequence...");
+    } catch (e) {
+        console.error(e);
+        showToast("Test Failed");
+    }
+};
