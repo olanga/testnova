@@ -17,39 +17,13 @@ export function openEditor(key) {
     if (titleEl) {
         updateTitleDisplay(titleEl, key);
         
-        // --- ADD RENAME LISTENER (Robust Mobile Support) ---
-        // 1. Disable native text selection to prevent conflict
+        // --- RENAME LISTENER (Double Click / Double Tap) ---
+        // Prevents highlighting text on double tap
         titleEl.style.userSelect = 'none';
         titleEl.style.webkitUserSelect = 'none';
-        titleEl.style.webkitTouchCallout = 'none'; // iOS disable callout
-
-        let pressTimer;
         
-        const cancelPress = () => clearTimeout(pressTimer);
-
-        const startPress = (e) => {
-            // Prevent default browser actions (text select, magnifier, etc.)
-            // strictly on touch events to ensure the timer holds.
-            if (e.type === 'touchstart') {
-                e.preventDefault(); 
-            }
-            
-            cancelPress();
-            pressTimer = setTimeout(() => handleRename(titleEl), 800);
-        };
-
-        // Start Events
-        titleEl.onmousedown = startPress;
-        titleEl.ontouchstart = startPress;
-        
-        // End/Cancel Events
-        titleEl.onmouseup = cancelPress;
-        titleEl.onmouseleave = cancelPress;
-        titleEl.ontouchend = cancelPress;
-        titleEl.ontouchcancel = cancelPress; // Handle interruptions (alerts, etc)
-        titleEl.ontouchmove = cancelPress;   // Cancel if user tries to scroll
-        
-        titleEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
+        // Standard event works on both PC (click) and Mobile (tap)
+        titleEl.ondblclick = () => handleRename(titleEl);
     }
 
     // --- 2. LOAD DATA ---
