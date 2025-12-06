@@ -16,14 +16,6 @@ export function openEditor(key) {
     const titleEl = document.querySelector('.modal-title');
     if (titleEl) {
         updateTitleDisplay(titleEl, key);
-        
-        // --- RENAME LISTENER (Double Click / Double Tap) ---
-        // Prevents highlighting text on double tap
-        titleEl.style.userSelect = 'none';
-        titleEl.style.webkitUserSelect = 'none';
-        
-        // Standard event works on both PC (click) and Mobile (tap)
-        titleEl.ondblclick = () => handleRename(titleEl);
     }
 
     // --- 2. LOAD DATA ---
@@ -70,7 +62,13 @@ export function saveDrillChanges() {
     saveDrillsToStorage();
 
     closeEditor();
-    showToast(`Saved Level ${selectedLevel}`);
+    
+    // Message Update: "Config saved" for custom drills
+    if (editingDrillKey.startsWith('cust_')) {
+        showToast("Config saved");
+    } else {
+        showToast(`Saved Level ${selectedLevel}`);
+    }
     
     // Notify main to refresh UI
     document.dispatchEvent(new CustomEvent('drills-updated'));
@@ -79,13 +77,9 @@ export function saveDrillChanges() {
 // --- Renaming Logic ---
 
 function handleRename(titleEl) {
-    // Only allow renaming Custom drills (starting with cust_)
-    if (!editingDrillKey || !editingDrillKey.startsWith('cust_')) {
-        showToast("Cannot rename factory drills");
-        return;
-    }
+    if (!editingDrillKey || !editingDrillKey.startsWith('cust_')) return;
 
-    const currentDisplayName = titleEl.title;
+    const currentDisplayName = titleEl.getAttribute('data-name') || titleEl.textContent.replace(' ✎', '');
     const newName = prompt("Rename Drill (Max 32 chars)\nAllowed: a-z A-Z 0-9 . - # [ ] > < + ) ( Space", currentDisplayName);
 
     if (!newName || newName === currentDisplayName) return;
@@ -96,50 +90,43 @@ function handleRename(titleEl) {
         return;
     }
     
-    // Allowed: a-z, A-Z, 0-9, . - # [ ] > < + ) ( Space
     const validRegex = /^[a-zA-Z0-9.\-#\[\]><\+\)\( ]+$/;
-    
     if (!validRegex.test(newName)) {
         showToast("Invalid characters");
         return;
     }
 
     // 2. Identify Category
-    const parts = editingDrillKey.split('_'); // e.g. ["cust", "A", "Name"]
+    const parts = editingDrillKey.split('_'); 
     if (parts.length < 3) return;
     
-    const catChar = parts[1]; // "A", "B", or "C"
+    const catChar = parts[1]; 
     const catListKey = `custom-${catChar.toLowerCase()}`;
     const list = userCustomDrills[catListKey];
     
     if (!list) return;
 
-    // 3. Check Uniqueness & Generate Key
+    // 3. Check Uniqueness
     const newKey = `cust_${catChar}_${newName}`;
-    
     if (currentDrills[newKey] && newKey !== editingDrillKey) {
         showToast("Name already exists");
         return;
     }
 
-    // 4. Update Data Structures
-    // A. Update the list entry
+    // 4. Update Data
     const entry = list.find(d => d.key === editingDrillKey);
     if (entry) {
         entry.name = newName;
         entry.key = newKey;
     }
 
-    // B. Move Drill Data to new Key
     currentDrills[newKey] = currentDrills[editingDrillKey];
     delete currentDrills[editingDrillKey];
 
-    // C. Persist Changes
     editingDrillKey = newKey;
-    localStorage.setItem('custom_data', JSON.stringify(userCustomDrills)); // Save List
-    saveDrillsToStorage(); // Save Drill Data
+    localStorage.setItem('custom_data', JSON.stringify(userCustomDrills)); 
+    saveDrillsToStorage(); 
 
-    // D. Update UI
     updateTitleDisplay(titleEl, newKey);
     showToast("Renamed Successfully");
     document.dispatchEvent(new CustomEvent('drills-updated'));
@@ -147,11 +134,12 @@ function handleRename(titleEl) {
 
 function updateTitleDisplay(el, key) {
     let displayName = key;
+    let isCustom = false;
+
     if (key.startsWith('cust_')) {
-        // Find name in userCustomDrills or fallback to parsing key
+        isCustom = true;
         const parts = key.split('_');
         if (parts.length >= 3) {
-           // Try to find the real name in the list (handles underscores vs spaces if relevant)
            const catKey = `custom-${parts[1].toLowerCase()}`;
            const entry = userCustomDrills[catKey]?.find(d => d.key === key);
            displayName = entry ? entry.name : key.replace(/^cust_[A-C]_/, '');
@@ -160,7 +148,29 @@ function updateTitleDisplay(el, key) {
         displayName = key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
     
-    el.textContent = `Edit: ${displayName}`;
+    // Store raw name for reference
+    el.setAttribute('data-name', displayName);
+    el.innerHTML = ''; // Clear current content
+    
+    // Create Text Node
+    const textSpan = document.createElement('span');
+    textSpan.textContent = displayName;
+    el.appendChild(textSpan);
+
+    // Add explicit Edit Icon for custom drills
+    if (isCustom) {
+        const icon = document.createElement('span');
+        icon.textContent = ' ✎';
+        icon.style.opacity = '0.6';
+        icon.style.cursor = 'pointer';
+        icon.style.marginLeft = '8px';
+        icon.onclick = (e) => {
+            e.stopPropagation();
+            handleRename(el);
+        };
+        el.appendChild(icon);
+    }
+    
     el.title = displayName;
 }
 
@@ -173,8 +183,7 @@ function renderEditor() {
     const isConnected = bleState.isConnected;
 
     tempDrillData.forEach((stepOptions, stepIndex) => {
-        
-        // --- 1. Swap Zone (Between balls) ---
+        // Swap Zone
         if (stepIndex > 0) {
             const swapDiv = document.createElement('div');
             swapDiv.className = 'swap-zone';
@@ -182,7 +191,7 @@ function renderEditor() {
             modalBody.appendChild(swapDiv);
         }
 
-        // --- 2. Group Header ---
+        // Group Header
         const groupDiv = document.createElement('div');
         groupDiv.className = 'ball-group';
         
@@ -197,12 +206,11 @@ function renderEditor() {
                 ${plusBtn}
             </div>`;
 
-        // --- 3. Render Options ---
+        // Render Options
         stepOptions.forEach((ballParams, optIndex) => {
             const optDiv = document.createElement('div');
             optDiv.className = 'option-card';
             
-            // Grid of Inputs
             let gridHtml = '<div class="editor-grid">';
             RANGE_CONFIG.forEach(cfg => {
                 gridHtml += `
