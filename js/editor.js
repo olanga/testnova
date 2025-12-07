@@ -54,7 +54,11 @@ export function saveDrillChanges() {
             ball[2] = clamp(ball[2], -50, 100);  
             ball[3] = clamp(ball[3], -10, 10);   
             ball[4] = clamp(ball[4], 0, 100);    
-            ball[5] = clamp(ball[5], 1, 200);    
+            ball[5] = clamp(ball[5], 1, 200);
+            
+            // Sanitize Active Flag (Index 6)
+            if(ball[6] === undefined) ball[6] = 1;
+            ball[6] = ball[6] === 1 ? 1 : 0; 
         });
     });
 
@@ -63,12 +67,8 @@ export function saveDrillChanges() {
 
     closeEditor();
     
-    // Message Update: "Config saved" for custom drills
-    if (editingDrillKey.startsWith('cust_')) {
-        showToast("Config saved");
-    } else {
-        showToast(`Saved Level ${selectedLevel}`);
-    }
+    // Unified Save Message
+    showToast("Configuration saved");
     
     // Notify main to refresh UI
     document.dispatchEvent(new CustomEvent('drills-updated'));
@@ -183,6 +183,9 @@ function renderEditor() {
     const isConnected = bleState.isConnected;
 
     tempDrillData.forEach((stepOptions, stepIndex) => {
+        // --- CHECK ACTIVE STATE ---
+        const isActive = stepOptions[0][6] === undefined ? 1 : stepOptions[0][6];
+
         // Swap Zone
         if (stepIndex > 0) {
             const swapDiv = document.createElement('div');
@@ -193,7 +196,7 @@ function renderEditor() {
 
         // Group Header
         const groupDiv = document.createElement('div');
-        groupDiv.className = 'ball-group';
+        groupDiv.className = `ball-group ${isActive ? '' : 'inactive'}`;
         
         const isSingle = stepOptions.length === 1;
         const plusBtn = isSingle 
@@ -202,7 +205,12 @@ function renderEditor() {
 
         groupDiv.innerHTML = `
             <div class="group-title">
-                <span>Ball ${stepIndex + 1}</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span>Ball ${stepIndex + 1}</span>
+                    <div class="ball-toggle ${isActive ? 'active' : ''}" onclick="window.handleToggleBallActive(${stepIndex})">
+                        <div class="toggle-switch"></div>
+                    </div>
+                </div>
                 ${plusBtn}
             </div>`;
 
@@ -223,7 +231,8 @@ function renderEditor() {
                                class="${cfg.class}" 
                                value="${ballParams[cfg.idx]}" 
                                min="${cfg.min}" max="${cfg.max}" step="${cfg.step}"
-                               oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, ${cfg.idx}, this.value)">
+                               oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, ${cfg.idx}, this.value)"
+                               ${!isActive ? 'disabled' : ''}>
                     </div>
                 `;
             });
@@ -235,7 +244,7 @@ function renderEditor() {
                 <div class="card-actions">
                      <button class="btn-action btn-act-test" 
                              onclick="window.handleTestBall(${stepIndex}, ${optIndex})" 
-                             ${isConnected ? '' : 'disabled'}>Test</button>
+                             ${isConnected && isActive ? '' : 'disabled'}>Test</button>
                              
                      <button class="btn-action btn-act-clone" 
                              onclick="window.handleCloneBall(${stepIndex}, ${optIndex})">Clone</button>
@@ -270,6 +279,16 @@ window.handleSwapSteps = (idxA, idxB) => {
     if (!tempDrillData) return;
     [tempDrillData[idxA], tempDrillData[idxB]] = [tempDrillData[idxB], tempDrillData[idxA]];
     renderEditor(); 
+};
+
+window.handleToggleBallActive = (stepIdx) => {
+    if (!tempDrillData) return;
+    const currentVal = tempDrillData[stepIdx][0][6] === undefined ? 1 : tempDrillData[stepIdx][0][6];
+    const newVal = currentVal === 1 ? 0 : 1;
+
+    // Toggle for all options in this step
+    tempDrillData[stepIdx].forEach(opt => opt[6] = newVal);
+    renderEditor();
 };
 
 window.handleAddOption = (stepIndex) => {
@@ -343,17 +362,24 @@ window.handleTestCombo = async () => {
 
     if (!tempDrillData || tempDrillData.length === 0) return;
 
-    // Collect 1 option per step, ensuring Reps = 1
+    // Collect 1 option per step, ensuring Reps = 1 AND only active balls
     const balls = [];
     
     tempDrillData.forEach(stepOptions => {
-        // Use the first option for deterministic testing (index 0)
-        // or random if preferred, but usually Editor tests what you see first.
+        // Skip inactive
+        if (stepOptions[0][6] === 0) return;
+
+        // Use the first option for deterministic testing
         const d = stepOptions[0]; 
         
         // params: top, bot, hgt, drop, freq, REPS=1
         balls.push(packBall(d[0], d[1], d[2], d[3], d[4], 1));
     });
+
+    if (balls.length === 0) {
+        showToast("No active balls to test");
+        return;
+    }
 
     // Construct Full Sequence Packet
     // Header (7) + Payload (balls * 24)
