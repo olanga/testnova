@@ -20,7 +20,7 @@ export function openEditor(key) {
 
     // --- 2. LOAD DATA ---
     const chk = document.getElementById('chk-drill-random');
-    if (chk) chk.checked = !!currentDrills[key].random;
+    if (chk) chk.checked = !!(currentDrills[key] && currentDrills[key].random);
 
     if (currentDrills[key] && currentDrills[key][selectedLevel]) {
         // Deep copy data to tempDrillData
@@ -31,6 +31,14 @@ export function openEditor(key) {
     }
 
     renderEditor();
+    
+    // Disable "Delete" button if it's a standard drill (not custom)
+    const btnDel = document.querySelector('.btn-delete-drill');
+    if(btnDel) {
+        btnDel.disabled = !key.startsWith('cust_');
+        btnDel.style.opacity = key.startsWith('cust_') ? '1' : '0.5';
+    }
+
     document.getElementById('editor-modal').classList.add('open');
 }
 
@@ -66,11 +74,7 @@ export function saveDrillChanges() {
     saveDrillsToStorage();
 
     closeEditor();
-    
-    // Unified Save Message
     showToast("Configuration saved");
-    
-    // Notify main to refresh UI
     document.dispatchEvent(new CustomEvent('drills-updated'));
 }
 
@@ -84,19 +88,11 @@ function handleRename(titleEl) {
 
     if (!newName || newName === currentDisplayName) return;
 
-    // 1. Validation
-    if (newName.length > 32) { 
-        showToast("Name too long (Max 32)");
-        return;
-    }
+    if (newName.length > 32) { showToast("Name too long (Max 32)"); return; }
     
     const validRegex = /^[a-zA-Z0-9.\-#\[\]><\+\)\( ]+$/;
-    if (!validRegex.test(newName)) {
-        showToast("Invalid characters");
-        return;
-    }
+    if (!validRegex.test(newName)) { showToast("Invalid characters"); return; }
 
-    // 2. Identify Category
     const parts = editingDrillKey.split('_'); 
     if (parts.length < 3) return;
     
@@ -106,14 +102,12 @@ function handleRename(titleEl) {
     
     if (!list) return;
 
-    // 3. Check Uniqueness
     const newKey = `cust_${catChar}_${newName}`;
     if (currentDrills[newKey] && newKey !== editingDrillKey) {
         showToast("Name already exists");
         return;
     }
 
-    // 4. Update Data
     const entry = list.find(d => d.key === editingDrillKey);
     if (entry) {
         entry.name = newName;
@@ -148,33 +142,23 @@ function updateTitleDisplay(el, key) {
         displayName = key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
     
-    // Store raw name for reference
     el.setAttribute('data-name', displayName);
-    el.innerHTML = ''; // Clear current content
-    
-    // Create Text Node
+    el.innerHTML = ''; 
     const textSpan = document.createElement('span');
     textSpan.textContent = displayName;
     el.appendChild(textSpan);
 
-    // Add explicit Edit Icon for custom drills
     if (isCustom) {
         const icon = document.createElement('span');
         icon.textContent = ' ✎';
         icon.style.opacity = '0.6';
         icon.style.cursor = 'pointer';
         icon.style.marginLeft = '8px';
-        icon.onclick = (e) => {
-            e.stopPropagation();
-            handleRename(el);
-        };
+        icon.onclick = (e) => { e.stopPropagation(); handleRename(el); };
         el.appendChild(icon);
     }
-    
     el.title = displayName;
 }
-
-// --- Internal Rendering Logic ---
 
 function renderEditor() {
     const modalBody = document.getElementById('editor-body');
@@ -183,10 +167,8 @@ function renderEditor() {
     const isConnected = bleState.isConnected;
 
     tempDrillData.forEach((stepOptions, stepIndex) => {
-        // --- CHECK ACTIVE STATE ---
         const isActive = stepOptions[0][6] === undefined ? 1 : stepOptions[0][6];
 
-        // Swap Zone
         if (stepIndex > 0) {
             const swapDiv = document.createElement('div');
             swapDiv.className = 'swap-zone';
@@ -194,7 +176,6 @@ function renderEditor() {
             modalBody.appendChild(swapDiv);
         }
 
-        // Group Header
         const groupDiv = document.createElement('div');
         groupDiv.className = `ball-group ${isActive ? '' : 'inactive'}`;
         
@@ -214,7 +195,6 @@ function renderEditor() {
                 ${plusBtn}
             </div>`;
 
-        // Render Options
         stepOptions.forEach((ballParams, optIndex) => {
             const optDiv = document.createElement('div');
             optDiv.className = 'option-card';
@@ -239,7 +219,6 @@ function renderEditor() {
             gridHtml += '</div>';
 
             const isLastBall = tempDrillData.length === 1 && stepOptions.length === 1;
-
             const actionsHtml = `
                 <div class="card-actions">
                      <button class="btn-action btn-act-test" 
@@ -254,13 +233,10 @@ function renderEditor() {
                              ${isLastBall ? 'disabled' : ''}>Delete</button>
                 </div>
             `;
-
             const label = stepOptions.length > 1 ? `<span class="option-label">Option ${optIndex + 1}</span>` : '';
-
             optDiv.innerHTML = label + gridHtml + actionsHtml;
             groupDiv.appendChild(optDiv);
         });
-
         modalBody.appendChild(groupDiv);
     });
 }
@@ -285,8 +261,6 @@ window.handleToggleBallActive = (stepIdx) => {
     if (!tempDrillData) return;
     const currentVal = tempDrillData[stepIdx][0][6] === undefined ? 1 : tempDrillData[stepIdx][0][6];
     const newVal = currentVal === 1 ? 0 : 1;
-
-    // Toggle for all options in this step
     tempDrillData[stepIdx].forEach(opt => opt[6] = newVal);
     renderEditor();
 };
@@ -299,7 +273,6 @@ window.handleAddOption = (stepIndex) => {
 
 window.handleCloneBall = (stepIdx, optIdx) => {
     const ballConfig = [...tempDrillData[stepIdx][optIdx]];
-    
     if (tempDrillData[stepIdx].length > 1) {
         tempDrillData[stepIdx].splice(optIdx + 1, 0, ballConfig);
     } else {
@@ -321,92 +294,146 @@ window.handleDeleteBall = (stepIdx, optIdx) => {
     renderEditor();
 };
 
-window.handleTestBall = async (stepIdx, optIdx) => {
-    if (!bleState.isConnected) {
-        showToast("Device not connected");
+// --- UPDATED SAVE AS LOGIC ---
+window.handleSaveAsDrill = () => {
+    const newName = prompt("Save New Drill As:");
+    if(!newName) return;
+
+    if (newName.length > 32) { showToast("Name too long"); return; }
+    if (!/^[a-zA-Z0-9.\-#\[\]><\+\)\( ]+$/.test(newName)) { showToast("Invalid characters"); return; }
+
+    let targetCat = null;
+
+    // 1. Determine Target Category
+    // If the drill we are editing is ALREADY a custom drill (e.g., cust_A_...),
+    // we want to save into that same category.
+    if (editingDrillKey.startsWith('cust_')) {
+        const parts = editingDrillKey.split('_');
+        if (parts.length >= 2) {
+            const catChar = parts[1].toLowerCase(); // 'a', 'b', or 'c'
+            targetCat = `custom-${catChar}`;
+        }
+    }
+
+    // 2. Fallback or Validation
+    // If it wasn't a custom drill (it was a preset), OR if extraction failed,
+    // find the first available category.
+    if (!targetCat) {
+        if (userCustomDrills['custom-a'].length < 20) targetCat = 'custom-a';
+        else if (userCustomDrills['custom-b'].length < 20) targetCat = 'custom-b';
+        else if (userCustomDrills['custom-c'].length < 20) targetCat = 'custom-c';
+        else { showToast("All custom banks full!"); return; }
+    } else {
+        // We have a specific target (e.g. Custom B). Check if it's full.
+        // (Note: If we are effectively renaming/saving-as, we are adding 1. 
+        // We only check limit if we are adding a NEW key)
+        const catChar = targetCat.split('-')[1].toUpperCase(); 
+        const potentialKey = `cust_${catChar}_${newName.replace(/\s+/g, '_')}`;
+        
+        // If the key doesn't exist yet, we are adding new. Check limit.
+        if (!currentDrills[potentialKey] && userCustomDrills[targetCat].length >= 20) {
+             showToast(`Category ${catChar} is full!`);
+             return;
+        }
+    }
+
+    const catChar = targetCat.split('-')[1].toUpperCase(); 
+    const newKey = `cust_${catChar}_${newName.replace(/\s+/g, '_')}`;
+
+    if (currentDrills[newKey]) {
+        if(!confirm(`Overwrite existing drill "${newName}" in Custom ${catChar}?`)) return;
+    } else {
+         userCustomDrills[targetCat].push({ name: newName, key: newKey });
+    }
+
+    let baseDrill = currentDrills[editingDrillKey];
+    if (!baseDrill) baseDrill = { 1: [], 2: [], 3: [] }; 
+    
+    const newDrillData = JSON.parse(JSON.stringify(baseDrill));
+    newDrillData[selectedLevel] = tempDrillData;
+    
+    const chk = document.getElementById('chk-drill-random');
+    if (chk) newDrillData.random = chk.checked;
+
+    currentDrills[newKey] = newDrillData;
+    
+    saveDrillsToStorage(); 
+    localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
+
+    closeEditor();
+    openEditor(newKey);
+    showToast(`Saved to Custom ${catChar}`);
+    document.dispatchEvent(new CustomEvent('drills-updated'));
+};
+
+window.handleDeleteDrill = () => {
+    if (!editingDrillKey) return;
+    
+    if (!editingDrillKey.startsWith('cust_')) {
+        showToast("Cannot delete built-in drills");
         return;
     }
+
+    if (!confirm("Are you sure you want to delete this drill?")) return;
+
+    const parts = editingDrillKey.split('_');
+    if(parts.length >= 2) {
+        const catKey = `custom-${parts[1].toLowerCase()}`;
+        if (userCustomDrills[catKey]) {
+            userCustomDrills[catKey] = userCustomDrills[catKey].filter(d => d.key !== editingDrillKey);
+        }
+    }
+
+    delete currentDrills[editingDrillKey];
+
+    saveDrillsToStorage();
+    localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
+
+    closeEditor();
+    showToast("Drill Deleted");
+    document.dispatchEvent(new CustomEvent('drills-updated'));
+};
+
+window.handleTestBall = async (stepIdx, optIdx) => {
+    if (!bleState.isConnected) { showToast("Device not connected"); return; }
     
     const d = tempDrillData[stepIdx][optIdx];
-    
-    // Construct Packet manually (Protocol Header + Ball Data)
     const ballData = packBall(d[0], d[1], d[2], d[3], d[4], 1); 
     
     const buffer = new ArrayBuffer(31); 
     const view = new DataView(buffer);
-    
-    // Header
-    view.setUint8(0, 0x81); 
-    view.setUint16(1, 28, true); // Length (4 + 24)
-    view.setUint8(3, 1); 
-    view.setUint16(4, 1, true); 
-    view.setUint8(6, 0);
-    
-    // Payload
+    view.setUint8(0, 0x81); view.setUint16(1, 28, true); 
+    view.setUint8(3, 1); view.setUint16(4, 1, true); view.setUint8(6, 0);
     new Uint8Array(buffer).set(ballData, 7);
     
-    try {
-        await sendPacket(new Uint8Array(buffer));
-        showToast("Test Ball Fired");
-    } catch (e) {
-        console.error(e);
-        showToast("Test Failed");
-    }
+    try { await sendPacket(new Uint8Array(buffer)); showToast("Test Ball Fired"); } 
+    catch (e) { console.error(e); showToast("Test Failed"); }
 };
 
 window.handleTestCombo = async () => {
-    if (!bleState.isConnected) {
-        showToast("Device not connected");
-        return;
-    }
-
+    if (!bleState.isConnected) { showToast("Device not connected"); return; }
     if (!tempDrillData || tempDrillData.length === 0) return;
 
-    // Collect 1 option per step, ensuring Reps = 1 AND only active balls
     const balls = [];
-    
     tempDrillData.forEach(stepOptions => {
-        // Skip inactive
         if (stepOptions[0][6] === 0) return;
-
-        // Use the first option for deterministic testing
         const d = stepOptions[0]; 
-        
-        // params: top, bot, hgt, drop, freq, REPS=1
         balls.push(packBall(d[0], d[1], d[2], d[3], d[4], 1));
     });
 
-    if (balls.length === 0) {
-        showToast("No active balls to test");
-        return;
-    }
+    if (balls.length === 0) { showToast("No active balls to test"); return; }
 
-    // Construct Full Sequence Packet
-    // Header (7) + Payload (balls * 24)
     const totalLen = 7 + (balls.length * 24);
     const buffer = new ArrayBuffer(totalLen);
     const view = new DataView(buffer);
     const uint8 = new Uint8Array(buffer);
 
-    // Protocol Header
-    view.setUint8(0, 0x81); 
-    view.setUint16(1, 4 + (balls.length * 24), true); // Payload length
-    view.setUint8(3, 1); 
-    view.setUint16(4, 1, true); 
-    view.setUint8(6, 0);
+    view.setUint8(0, 0x81); view.setUint16(1, 4 + (balls.length * 24), true); 
+    view.setUint8(3, 1); view.setUint16(4, 1, true); view.setUint8(6, 0);
 
-    // Append Balls
     let offset = 7;
-    balls.forEach(b => {
-        uint8.set(b, offset);
-        offset += 24;
-    });
+    balls.forEach(b => { uint8.set(b, offset); offset += 24; });
 
-    try {
-        await sendPacket(uint8);
-        showToast("Testing Full Sequence...");
-    } catch (e) {
-        console.error(e);
-        showToast("Test Failed");
-    }
+    try { await sendPacket(uint8); showToast("Testing Drill..."); } 
+    catch (e) { console.error(e); showToast("Test Failed"); }
 };

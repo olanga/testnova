@@ -132,10 +132,18 @@
             <div class="modal-close" onclick="closeEditor()">×</div>
         </div>
         <div id="editor-body" class="modal-body"></div>
+        
         <div class="modal-footer">
-            <button class="btn-modal btn-cancel" onclick="closeEditor()">Cancel</button>
-            <button class="btn-modal btn-test-combo" onclick="window.handleTestCombo()">Test drill</button>
-            <button class="btn-modal btn-save" onclick="saveDrillChanges()">Save</button>
+            <div class="footer-row-top">
+                <button class="btn-modal btn-cancel" onclick="closeEditor()">Cancel</button>
+                <button class="btn-modal btn-save" onclick="saveDrillChanges()">Save</button>
+                <button class="btn-modal btn-save-as" onclick="window.handleSaveAsDrill()">Save As</button>
+            </div>
+            
+            <div class="footer-row-bottom">
+                <button class="btn-modal btn-delete-drill" onclick="window.handleDeleteDrill()">Delete</button>
+                <button class="btn-modal btn-test-combo" onclick="window.handleTestCombo()">Test drill</button>
+            </div>
         </div>
     </div>
 </div>
