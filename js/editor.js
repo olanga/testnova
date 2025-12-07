@@ -85,14 +85,14 @@ function handleRename(titleEl) {
 
     const currentDisplayName = titleEl.getAttribute('data-name') || titleEl.textContent.replace(' ✎', '');
     
-    // UPDATED: Text now says Max 26 chars
-    const newName = prompt("Rename Drill (Max 26 chars)\nAllowed: a-z A-Z 0-9 . - # [ ] > < + ) ( Space", currentDisplayName);
+    // UPDATED: Text now says Max 25 chars
+    const newName = prompt("Rename Drill (Max 25 chars)\nAllowed: a-z A-Z 0-9 . - # [ ] > < + ) ( Space", currentDisplayName);
 
     if (!newName || newName === currentDisplayName) return;
 
-    // Validation Limit 26
-    if (newName.length > 26) { 
-        showToast("Name too long (Max 26)");
+    // Validation Limit 25
+    if (newName.length > 25) { 
+        showToast("Name too long (Max 25)");
         return;
     }
     
@@ -305,12 +305,12 @@ window.handleDeleteBall = (stepIdx, optIdx) => {
 
 // --- UPDATED SAVE AS LOGIC ---
 window.handleSaveAsDrill = () => {
-    // UPDATED: Text now says Max 26 chars
-    const newName = prompt("Save New Drill As (Max 26 chars):");
+    // UPDATED: Text now says Max 25 chars
+    const newName = prompt("Save New Drill As (Max 25 chars):");
     if(!newName) return;
 
-    // Validation Limit 26
-    if (newName.length > 26) { showToast("Name too long (Max 26)"); return; }
+    // Validation Limit 25
+    if (newName.length > 25) { showToast("Name too long (Max 25)"); return; }
     if (!/^[a-zA-Z0-9.\-#\[\]><\+\)\( ]+$/.test(newName)) { showToast("Invalid characters"); return; }
 
     let targetCat = null;
