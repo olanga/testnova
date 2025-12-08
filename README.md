@@ -1,7 +1,7 @@
 # testnova
 
 ![Alt text](https://github.com/olanga/testnova/blob/main/NovaDrillControl.png?raw=true "Nova  Drill Control")
-![Alt text](https://github.com/olanga/testnova/blob/main/DrillEdit2.png?raw=true "Nova  Drill Control")
+
 
 
 
