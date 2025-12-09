@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drill Converter</title>
+    <title>Drill Converter v4.1</title>
     <style>
         :root {
             --primary: #0984e3;
@@ -11,6 +11,7 @@
             --surface: #ffffff;
             --text: #2d3436;
             --border: #dfe6e9;
+            --danger: #d63031;
         }
 
         body {
@@ -32,8 +33,21 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
         }
 
-        h1 { margin-top: 0; font-size: 1.5rem; color: var(--primary); }
+        h1 { margin-top: 0; font-size: 1.5rem; color: var(--primary); margin-bottom: 10px; }
         
+        /* NEW: Formula Text Style */
+        .formula-text {
+            text-align: center;
+            color: #636e72;
+            font-size: 0.85rem;
+            margin-bottom: 25px;
+            font-family: monospace;
+            background: #f1f2f6;
+            padding: 10px;
+            border-radius: 8px;
+            line-height: 1.5;
+        }
+
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -74,6 +88,7 @@
             color: var(--primary);
             float: right;
         }
+        .val-display.limited { color: var(--danger); }
 
         /* Results Section */
         .results {
@@ -140,7 +155,12 @@
 <body>
 
 <div class="container">
-    <h1>Drill Converter</h1>
+    <h1>Drill Converter v4.1</h1>
+    
+    <div class="formula-text">
+        Top = 970 + (630.5 × Speed) ± (342 × Spin)<br>
+        Bot = 970 + (630.5 × Speed) ∓ (342 × Spin)
+    </div>
 
     <div class="checkbox-group">
         <input type="checkbox" id="chk-random" onchange="calc()">
@@ -210,35 +230,37 @@
 </div>
 
 <script>
-    // --- Constants ---
-    // Derived from analysis of drill_data.csv
-    const SLOPE_SPEED = 630.5;
-    const INT_SPEED = 970;
-    const SLOPE_SPIN = 684;
-
-    // Derived from index.html
+    // --- Limits & Config ---
     const LIMIT_MIN = 400;
     const LIMIT_MAX = 7500;
+    
+    // Spin Constraints Lookup Table (Speed -> Max Spin)
+    const SPIN_LIMITS = {
+        "0": 2, "0.5": 3, 
+        "1": 4, "1.5": 5, 
+        "2": 6, "2.5": 7, 
+        "3": 8, "3.5": 9, 
+        "4": 10, "4.5": 10, 
+        "5": 9, "5.5": 8, 
+        "6": 8, "6.5": 7, 
+        "7": 6, "7.5": 5, 
+        "8": 4, "8.5": 3, 
+        "9": 2, "9.5": 1, 
+        "10": 0
+    };
 
     function clamp(val, min, max) {
         return Math.max(min, Math.min(max, val));
     }
 
-    // Helper: Convert Number to Little Endian Hex String
     function toHex(num, type) {
         const buffer = new ArrayBuffer(4);
         const view = new DataView(buffer);
-        
-        if (type === 'float') {
-            view.setFloat32(0, num, true); // true = Little Endian
-        } else {
-            view.setUint32(0, num, true);
-        }
+        if (type === 'float') view.setFloat32(0, num, true);
+        else view.setUint32(0, num, true);
         
         let hex = '';
-        new Uint8Array(buffer).forEach(b => {
-            hex += b.toString(16).padStart(2, '0');
-        });
+        new Uint8Array(buffer).forEach(b => hex += b.toString(16).padStart(2, '0'));
         return hex;
     }
 
@@ -247,32 +269,46 @@
         const type = document.getElementById('rot').value;
         const isRandom = document.getElementById('chk-random').checked;
         const speedVal = parseFloat(document.getElementById('speed').value);
-        const spinVal = parseFloat(document.getElementById('spin').value);
-        const hgtInternal = parseInt(document.getElementById('hgt').value); // Direct internal value
+        let spinVal = parseFloat(document.getElementById('spin').value);
+        
+        const hgtInternal = parseInt(document.getElementById('hgt').value); 
         const drpApp = parseFloat(document.getElementById('drp').value);
         const frqApp = parseFloat(document.getElementById('frq').value);
         const repsVal = parseInt(document.getElementById('reps').value);
 
-        // Update UI Labels
+        // --- Spin Constraints ---
+        const maxAllowedSpin = SPIN_LIMITS[speedVal.toString()] ?? 10;
+        const effectiveSpin = Math.min(spinVal, maxAllowedSpin);
+
+        // Update UI Text
         document.getElementById('val-speed').textContent = speedVal;
-        document.getElementById('val-spin').textContent = spinVal;
+        
+        const spinLabel = document.getElementById('val-spin');
+        if (spinVal > maxAllowedSpin) {
+            spinLabel.textContent = `${effectiveSpin} (Max ${maxAllowedSpin})`;
+            spinLabel.classList.add('limited');
+        } else {
+            spinLabel.textContent = spinVal;
+            spinLabel.classList.remove('limited');
+        }
+
         document.getElementById('val-hgt').textContent = hgtInternal;
         document.getElementById('val-drp').textContent = drpApp;
         document.getElementById('val-frq').textContent = frqApp;
         document.getElementById('val-reps').textContent = repsVal;
 
-        // 2. Calculate Motor RPMs
-        const avgRpm = (SLOPE_SPEED * speedVal) + INT_SPEED;
-        const diffRpm = SLOPE_SPIN * spinVal;
+        // --- ALGORITHM V3 ---
+        const baseSpeed = 970 + (630.5 * speedVal);
+        const spinFactor = 342 * effectiveSpin; 
 
         let topRpm, botRpm;
 
         if (type === 'top') {
-            topRpm = avgRpm + (diffRpm / 2);
-            botRpm = avgRpm - (diffRpm / 2);
-        } else { // under
-            topRpm = avgRpm - (diffRpm / 2);
-            botRpm = avgRpm + (diffRpm / 2);
+            topRpm = baseSpeed + spinFactor;
+            botRpm = baseSpeed - spinFactor;
+        } else { 
+            topRpm = baseSpeed - spinFactor;
+            botRpm = baseSpeed + spinFactor;
         }
 
         // Clamp RPMs
@@ -291,7 +327,7 @@
         const csvLine = `${topRpm},${botRpm},${hgtInternal},${drpApp},${frqApp},${repsVal}`;
         document.getElementById('out-csv').textContent = csvLine;
 
-        // 5. Binary Encoding Math (from index.html packBall)
+        // 5. Binary Encoding
         const h_clamped = clamp(hgtInternal, -50, 100);
         const h_final = (h_clamped + 50) / 150 * 50 - 20;
 
@@ -301,8 +337,7 @@
         const f_clamped = clamp(frqApp, 0, 100);
         const f_final = (f_clamped / 100) + 0.5;
 
-        // 6. Build Hex Payload
-        // Header: 81 1C 00 01 01 00 [Rand]
+        // 6. Build Hex
         const headerSuffix = isRandom ? "01" : "00";
         const header = "811c00010100" + headerSuffix;
         
@@ -321,9 +356,7 @@
 
     function copyText(elementId) {
         const txt = document.getElementById(elementId).textContent;
-        navigator.clipboard.writeText(txt).then(() => {
-            // Optional feedback
-        });
+        navigator.clipboard.writeText(txt).then(() => {});
     }
 
     // Init
