@@ -175,7 +175,10 @@ export function handleDone() {
         return;
     }
     
-    const pause = parseInt(document.getElementById('input-pause').value);
+    // Read value as float and multiply by 1000 to get ms
+    const pauseInput = parseFloat(document.getElementById('input-pause').value);
+    const pause = pauseInput * 1000;
+
     if (!isPaused) {
          pauseTimer = setTimeout(() => { 
              if(isRunning && !isPaused) runIteration(); 

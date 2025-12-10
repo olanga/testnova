@@ -70,10 +70,15 @@ function setupEventListeners() {
     const inputPause = document.getElementById('input-pause');
     if (inputPause) {
         inputPause.onchange = (e) => {
-            let val = parseInt(e.target.value);
-            if(val < 500) val = 500;
-            if(val > 5000) val = 5000;
-            e.target.value = val;
+            // Change parseInt to parseFloat
+            let val = parseFloat(e.target.value);
+            
+            // Update limits: 500ms -> 0.5s, 5000ms -> 5.0s
+            if(val < 0.5) val = 0.5;
+            if(val > 5.0) val = 5.0;
+            
+            // Format to 1 decimal place
+            e.target.value = val.toFixed(1);
         };
     }
 
