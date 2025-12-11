@@ -124,9 +124,24 @@ function renderEditor() {
         groupDiv.className = `ball-group ${isActive ? '' : 'inactive'}`;
         
         const isSingle = stepOptions.length === 1;
+        
+        // Check for RND flag at index 10
+        const isRnd = isSingle && !!stepOptions[0][10];
+
         const plusBtn = isSingle 
             ? `<button class="btn-add-opt" onclick="window.handleAddOption(${stepIndex})">+</button>` 
             : '';
+
+        // RND Toggle HTML
+        // - Removed border-left and padding-left (vertical separator)
+        // - Increased margin-left to 45px to push it right (aligning approx with Spin box)
+        const rndHtml = isSingle ? `
+            <div style="display:flex; align-items:center; gap:8px; margin-left:45px;">
+                <span style="font-size:0.75rem; font-weight:800; color:var(--text-light); opacity:1.0;">RND</span>
+                <div class="ball-toggle ${isRnd ? 'active' : ''}" onclick="window.handleRndToggle(${stepIndex})">
+                    <div class="toggle-switch"></div>
+                </div>
+            </div>` : '';
 
         groupDiv.innerHTML = `
             <div class="group-title">
@@ -135,6 +150,7 @@ function renderEditor() {
                     <div class="ball-toggle ${isActive ? 'active' : ''}" onclick="window.handleToggleBallActive(${stepIndex})">
                         <div class="toggle-switch"></div>
                     </div>
+                    ${rndHtml}
                 </div>
                 ${plusBtn}
             </div>`;
@@ -478,4 +494,12 @@ window.handleShareDrill = async () => {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
     }
+};
+
+window.handleRndToggle = (stepIdx) => {
+    if (!tempDrillData) return;
+    const ball = tempDrillData[stepIdx][0];
+    // Toggle the RND flag at index 10
+    ball[10] = !ball[10];
+    renderEditor();
 };
