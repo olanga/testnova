@@ -168,6 +168,70 @@
     </div>
 </div>
 
+<div id="download-modal" class="modal-overlay">
+    <div class="modal" style="height:auto; min-height:300px;">
+        <div class="modal-header">
+            <div class="modal-title">Import Drill</div>
+            <div class="modal-close" onclick="window.closeDownloadModal()">×</div>
+        </div>
+        
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:20px; padding-top:15px;">
+            
+            <div class="control-pill" style="box-shadow:none; border:1px solid var(--border);">
+                <label>Share Code</label>
+                <input type="text" id="dl-code" placeholder="ABC123" maxlength="6" 
+                       style="text-align:center; letter-spacing:4px; text-transform:uppercase; font-size:1.6rem; color:var(--primary); font-weight:800;">
+            </div>
+
+            <div>
+                <div class="section-label" style="text-align:center; margin-bottom:8px;">Select Destination</div>
+                <div class="mode-switch" id="dl-cat-switch">
+                    <div class="mode-option active" onclick="window.selectDlCategory('custom-a', this)">Custom A</div>
+                    <div class="mode-option" onclick="window.selectDlCategory('custom-b', this)">Custom B</div>
+                    <div class="mode-option" onclick="window.selectDlCategory('custom-c', this)">Custom C</div>
+                </div>
+            </div>
+
+        </div>
+        
+        <div class="modal-footer">
+             <button class="btn-modal btn-save" onclick="window.performDownload()">Download & Import</button>
+        </div>
+    </div>
+</div>
+
+<div id="save-as-modal" class="modal-overlay">
+    <div class="modal" style="height:auto; min-height:300px;">
+        <div class="modal-header">
+            <div class="modal-title">Save As New Drill</div>
+            <div class="modal-close" onclick="window.closeSaveAsModal()">×</div>
+        </div>
+        
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:20px; padding-top:15px;">
+            
+            <div class="control-pill" style="box-shadow:none; border:1px solid var(--border);">
+                <label>Drill Name (Max 25)</label>
+                <input type="text" id="save-name" placeholder="My New Drill" maxlength="25" 
+                       style="text-align:center; font-size:1.2rem; color:var(--primary); font-weight:800; background:transparent;">
+            </div>
+
+            <div>
+                <div class="section-label" style="text-align:center; margin-bottom:8px;">Select Destination</div>
+                <div class="mode-switch" id="save-cat-switch">
+                    <div class="mode-option active" onclick="window.selectSaveCategory('custom-a', this)">Custom A</div>
+                    <div class="mode-option" onclick="window.selectSaveCategory('custom-b', this)">Custom B</div>
+                    <div class="mode-option" onclick="window.selectSaveCategory('custom-c', this)">Custom C</div>
+                </div>
+            </div>
+
+        </div>
+        
+        <div class="modal-footer">
+             <button class="btn-modal btn-save" onclick="window.performSaveAs()">Save Drill</button>
+        </div>
+    </div>
+</div>
+
 <script type="module" src="js/main.js"></script>
 
 </body>

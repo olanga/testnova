@@ -70,14 +70,11 @@ function setupEventListeners() {
     const inputPause = document.getElementById('input-pause');
     if (inputPause) {
         inputPause.onchange = (e) => {
-            // Change parseInt to parseFloat
+            // Updated Logic: Seconds (0.5 - 5.0)
             let val = parseFloat(e.target.value);
-            
-            // Update limits: 500ms -> 0.5s, 5000ms -> 5.0s
+            if(isNaN(val)) val = 1.0;
             if(val < 0.5) val = 0.5;
             if(val > 5.0) val = 5.0;
-            
-            // Format to 1 decimal place
             e.target.value = val.toFixed(1);
         };
     }
@@ -171,11 +168,66 @@ window.handleDrillClick = (key, btn) => {
     startDrillSequence(key);
 };
 
-// --- DOWNLOAD HANDLER (FIXED) ---
-window.handleDownloadDialog = async () => {
-    const code = prompt("Enter Share Code (e.g. ABC123):");
-    if (!code || code.trim().length !== 6) {
-        if(code) showToast("Invalid code format");
+// --- DOWNLOAD MODAL LOGIC (New) ---
+
+let selectedDownloadCat = 'custom-a';
+
+// 1. Open the Modal
+window.handleDownloadDialog = () => {
+    // Close main menu if open
+    const menu = document.getElementById('theme-menu');
+    if(menu) menu.classList.remove('open');
+
+    // Reset State
+    selectedDownloadCat = 'custom-a';
+    const codeInput = document.getElementById('dl-code');
+    if (codeInput) codeInput.value = '';
+    
+    // Reset Switch UI to default (A)
+    const switchEl = document.getElementById('dl-cat-switch');
+    if(switchEl) {
+        Array.from(switchEl.children).forEach(c => c.classList.remove('active'));
+        if(switchEl.children[0]) switchEl.children[0].classList.add('active'); 
+    }
+
+    const modal = document.getElementById('download-modal');
+    if(modal) {
+        modal.classList.add('open');
+        setTimeout(() => { if(codeInput) codeInput.focus(); }, 100);
+    }
+};
+
+// 2. Close the Modal
+window.closeDownloadModal = () => {
+    const modal = document.getElementById('download-modal');
+    if(modal) modal.classList.remove('open');
+};
+
+// 3. Handle Tab Switching inside Modal
+window.selectDlCategory = (val, btn) => {
+    selectedDownloadCat = val;
+    if(btn && btn.parentElement) {
+        Array.from(btn.parentElement.children).forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+    }
+};
+
+// 4. Perform Download
+window.performDownload = async () => {
+    const codeInput = document.getElementById('dl-code');
+    if(!codeInput) return;
+    
+    const code = codeInput.value.trim().toUpperCase();
+
+    if (code.length !== 6) {
+        showToast("Invalid code (Must be 6 chars)");
+        return;
+    }
+
+    // Check capacity before calling server
+    if (userCustomDrills[selectedDownloadCat].length >= 20) {
+        const catChar = selectedDownloadCat.split('-')[1].toUpperCase();
+        showToast(`Bank ${catChar} is full!`);
         return;
     }
 
@@ -184,47 +236,41 @@ window.handleDownloadDialog = async () => {
     try {
         const data = await downloadDrill(code);
         if (!data) {
-            showToast("Code not found or expired");
+            showToast("Code not found");
             return;
         }
 
         let name = data.name;
-        // Check for duplicates purely for visual naming (append Imp)
-        const allNames = [
-            ...userCustomDrills['custom-a'], 
-            ...userCustomDrills['custom-b'], 
-            ...userCustomDrills['custom-c']
-        ].map(d => d.name);
-
-        if (allNames.includes(name)) {
+        // Check for duplicates in the specific target category
+        const existingNames = userCustomDrills[selectedDownloadCat].map(d => d.name);
+        if (existingNames.includes(name)) {
             name = `${name} (Imp)`;
         }
 
-        let targetCat = 'custom-a';
-        if (userCustomDrills['custom-a'].length >= 20) {
-            if (userCustomDrills['custom-b'].length < 20) targetCat = 'custom-b';
-            else if (userCustomDrills['custom-c'].length < 20) targetCat = 'custom-c';
-            else { showToast("All custom banks full!"); return; }
-        }
-
-        const catChar = targetCat.split('-')[1].toUpperCase();
-        
-        // --- FIX: Append Timestamp to ensure Key is ALWAYS Unique ---
+        // Unique Key Generation
+        const catChar = selectedDownloadCat.split('-')[1].toUpperCase();
         const newKey = `cust_${catChar}_${name.replace(/\s+/g, '_')}_${Date.now()}`;
 
-        userCustomDrills[targetCat].push({ name: name, key: newKey });
+        // Save Data
+        userCustomDrills[selectedDownloadCat].push({ name: name, key: newKey });
         
         const newDrillObj = { 1: [], 2: [], 3: [], random: data.random };
         newDrillObj[selectedLevel] = data.params; 
-
         currentDrills[newKey] = newDrillObj;
 
         localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
         saveDrillsToStorage();
 
+        // UI Refresh
         renderDrillButtons();
-        showToast(`Imported to Custom ${catChar}`);
-        toggleMenu(); 
+        window.closeDownloadModal();
+        
+        // Auto-switch to the target tab
+        const tabBtn = document.querySelector(`.tab-btn[onclick*="${selectedDownloadCat}"]`);
+        if (tabBtn) switchTab(selectedDownloadCat, tabBtn);
+
+        showToast(`Imported to ${catChar}`);
+        toggleMenu(); // Close main menu if it was open behind modal
 
     } catch (e) {
         console.error(e);

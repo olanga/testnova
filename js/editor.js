@@ -7,6 +7,7 @@ import { uploadDrill } from './cloud.js';
 // --- Local State ---
 let tempDrillData = null;
 let editingDrillKey = null;
+let selectedSaveCat = 'custom-a'; // Default for Save As Modal
 
 // --- Public Module Functions ---
 
@@ -132,9 +133,7 @@ function renderEditor() {
             ? `<button class="btn-add-opt" onclick="window.handleAddOption(${stepIndex})">+</button>` 
             : '';
 
-        // RND Toggle HTML
-        // - Removed border-left and padding-left (vertical separator)
-        // - Increased margin-left to 45px to push it right (aligning approx with Spin box)
+        // RND Toggle Layout (Right side, separated by border)
         const rndHtml = isSingle ? `
             <div style="display:flex; align-items:center; gap:8px; margin-left:45px;">
                 <span style="font-size:0.75rem; font-weight:800; color:var(--text-light); opacity:1.0;">RND</span>
@@ -286,8 +285,17 @@ window.handleToggleBallActive = (stepIdx) => {
     renderEditor();
 };
 
+window.handleRndToggle = (stepIdx) => {
+    if (!tempDrillData) return;
+    const ball = tempDrillData[stepIdx][0];
+    ball[10] = !ball[10];
+    renderEditor();
+};
+
 window.handleAddOption = (stepIndex) => {
     const baseOption = JSON.parse(JSON.stringify(tempDrillData[stepIndex][0]));
+    // Copy the RND flag if present, or clear it? Usually options disable RND logic in UI.
+    // The UI hides RND toggle if >1 options anyway.
     tempDrillData[stepIndex].push(baseOption);
     renderEditor();
 };
@@ -312,24 +320,57 @@ window.handleDeleteBall = (stepIdx, optIdx) => {
     renderEditor();
 };
 
+// --- SAVE AS HANDLERS (UPDATED) ---
+
 window.handleSaveAsDrill = () => {
-    const newName = prompt("Save New Drill As (Max 25 chars):");
-    if(!newName) return;
+    // 1. Open Modal
+    selectedSaveCat = 'custom-a';
+    const nameInput = document.getElementById('save-name');
+    if (nameInput) nameInput.value = '';
+    
+    // Reset UI Switch
+    const switchEl = document.getElementById('save-cat-switch');
+    if(switchEl) {
+        Array.from(switchEl.children).forEach(c => c.classList.remove('active'));
+        if(switchEl.children[0]) switchEl.children[0].classList.add('active');
+    }
+
+    document.getElementById('save-as-modal').classList.add('open');
+    setTimeout(() => { if(nameInput) nameInput.focus(); }, 100);
+};
+
+window.closeSaveAsModal = () => {
+    document.getElementById('save-as-modal').classList.remove('open');
+};
+
+window.selectSaveCategory = (val, btn) => {
+    selectedSaveCat = val;
+    const parent = btn.parentElement;
+    Array.from(parent.children).forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+};
+
+window.performSaveAs = () => {
+    const newName = document.getElementById('save-name').value.trim();
+    if(!newName) { showToast("Enter a name"); return; }
     if (newName.length > 25) { showToast("Name too long"); return; }
     if (!/^[a-zA-Z0-9.\-#\[\]><\+\)\( ]+$/.test(newName)) { showToast("Invalid characters"); return; }
 
-    let targetCat = 'custom-a';
-    if (userCustomDrills['custom-a'].length >= 20) targetCat = 'custom-b';
-    if (userCustomDrills[targetCat].length >= 20 && userCustomDrills['custom-c'].length < 20) targetCat = 'custom-c';
-    
-    if (userCustomDrills[targetCat].length >= 20) { showToast("All banks full!"); return; }
+    const targetCat = selectedSaveCat;
+
+    // Check Capacity
+    if (userCustomDrills[targetCat].length >= 20) { 
+        showToast("That bank is full (Max 20)!"); 
+        return; 
+    }
 
     const catChar = targetCat.split('-')[1].toUpperCase(); 
-    // FIX: Unique Key Generation
     const newKey = `cust_${catChar}_${newName.replace(/\s+/g, '_')}_${Date.now()}`;
 
+    // Add to User Custom List
     userCustomDrills[targetCat].push({ name: newName, key: newKey });
 
+    // Prepare Data
     let baseDrill = currentDrills[editingDrillKey] || { 1: [], 2: [], 3: [] }; 
     const newDrillData = JSON.parse(JSON.stringify(baseDrill));
     newDrillData[selectedLevel] = tempDrillData;
@@ -337,16 +378,27 @@ window.handleSaveAsDrill = () => {
     const chk = document.getElementById('chk-drill-random');
     if (chk) newDrillData.random = chk.checked;
 
+    // Save and Persist
     currentDrills[newKey] = newDrillData;
-    
     saveDrillsToStorage(); 
     localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
 
+    // Cleanup and Switch
+    window.closeSaveAsModal();
     closeEditor();
     openEditor(newKey);
-    showToast(`Saved to ${catChar}`);
+    
+    // Update main buttons
     document.dispatchEvent(new CustomEvent('drills-updated'));
+    
+    // Switch main UI tab to where we just saved
+    const tabBtn = document.querySelector(`.tab-btn[onclick*="${targetCat}"]`);
+    if (tabBtn) switchTab(targetCat, tabBtn);
+    
+    showToast(`Saved to ${catChar}`);
 };
+
+// --- DELETE & RENAME ---
 
 window.handleDeleteDrill = () => {
     if (!editingDrillKey || !editingDrillKey.startsWith('cust_')) return;
@@ -383,7 +435,6 @@ function handleRename(titleEl) {
     const catChar = parts[1]; 
     const catListKey = `custom-${catChar.toLowerCase()}`;
     
-    // FIX: Unique Key
     const newKey = `cust_${catChar}_${newName.replace(/\s+/g, '_')}_${Date.now()}`;
     
     const list = userCustomDrills[catListKey];
@@ -441,7 +492,23 @@ window.handleTestCombo = async () => {
     const balls = [];
     tempDrillData.forEach(stepOptions => {
         if (stepOptions[0][6] === 0) return;
-        const d = stepOptions[0]; 
+        
+        // Clone for safety to not mutate editor data with RND logic
+        const chosen = stepOptions[0]; // Take first option for test
+        const d = [...chosen];
+
+        // RND Logic for Test Combo? 
+        // Usually static test is preferred, but let's apply RND logic for realism if active
+        if (d[10] === true) {
+            const currentDrop = d[3];
+            const limit = Math.abs(currentDrop);
+            if(limit > 0) {
+                 const totalSteps = (limit * 2) / 0.5;
+                 const randomStep = Math.floor(Math.random() * (totalSteps + 1));
+                 d[3] = -limit + (randomStep * 0.5);
+            }
+        }
+
         balls.push(packBall(d[0], d[1], d[2], d[3], d[4], 1));
     });
     if (balls.length === 0) { showToast("No active balls"); return; }
@@ -494,12 +561,4 @@ window.handleShareDrill = async () => {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
     }
-};
-
-window.handleRndToggle = (stepIdx) => {
-    if (!tempDrillData) return;
-    const ball = tempDrillData[stepIdx][0];
-    // Toggle the RND flag at index 10
-    ball[10] = !ball[10];
-    renderEditor();
 };
