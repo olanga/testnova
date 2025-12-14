@@ -3,6 +3,46 @@ import { bleState } from './bluetooth.js';
 import { showToast } from './utils.js';
 import { openEditor } from './editor.js';
 
+// --- NEW: Handle Create New Drill ---
+window.handleCreateNewDrill = (category) => {
+    if (userCustomDrills[category].length >= 20) {
+        showToast("Category is full (Max 20)");
+        return;
+    }
+
+    const newName = prompt("Enter Name for New Drill:");
+    if (!newName) return;
+
+    if (newName.length > 25) { 
+        showToast("Name too long (Max 25)"); 
+        return; 
+    }
+    
+    if (!/^[a-zA-Z0-9.\-#\[\]><\+\)\( ]+$/.test(newName)) { 
+        showToast("Invalid characters"); 
+        return; 
+    }
+
+    const catChar = category.split('-')[1].toUpperCase();
+    const newKey = `cust_${catChar}_${newName.replace(/\s+/g, '_')}_${Date.now()}`;
+
+    userCustomDrills[category].push({ name: newName, key: newKey });
+
+    currentDrills[newKey] = { 
+        1: [[[4123, 2233, 50, 0, 50, 1, 1, 5, 2, 'top']]], 
+        2: [], 
+        3: [],
+        random: false 
+    };
+
+    localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
+    saveDrillsToStorage();
+
+    renderDrillButtons();
+    showToast(`Created ${newName}`);
+    openEditor(newKey);
+};
+
 // --- NEW: Drag & Drop to Tab Handlers ---
 
 window.allowTabDrop = (e) => {
@@ -81,13 +121,33 @@ export function renderDrillButtons() {
         const container = document.getElementById(`view-${cat}`);
         if (!container) return;
         container.innerHTML = '';
-        if (userCustomDrills[cat].length === 0) {
-            container.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-light); font-size:0.8rem;">No drills imported.<br>Use Settings > Import</div>';
-        } else {
-            userCustomDrills[cat].forEach(item => {
-                createButton(container, item.key, item.name, true, cat);
-            });
-        }
+        
+        userCustomDrills[cat].forEach(item => {
+            createButton(container, item.key, item.name, true, cat);
+        });
+
+        // --- UPDATED: "New Drill" Button Styling ---
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn-drill btn-add-drill';
+        
+        // Flexbox styling for perfect centering
+        addBtn.style.width = '33%';
+        addBtn.style.margin = '10px auto'; 
+        addBtn.style.display = 'flex'; 
+        addBtn.style.flexDirection = 'column'; 
+        addBtn.style.alignItems = 'center'; 
+        addBtn.style.justifyContent = 'center';
+        addBtn.style.gap = '5px'; 
+        addBtn.style.padding = '10px';
+        
+        addBtn.innerHTML = `
+            <div class="drill-icon" style="border-color:var(--primary); opacity:0.8; margin:0;">
+                <div style="font-size:24px; font-weight:bold; color:var(--primary); line-height:0; display:flex; align-items:center; justify-content:center; width:100%; height:100%; padding-bottom:3px;">+</div>
+            </div>
+            <span style="color:var(--primary); font-weight:700; font-size:0.8rem;">New Drill</span>
+        `;
+        addBtn.onclick = () => window.handleCreateNewDrill(cat);
+        container.appendChild(addBtn);
     });
 }
 
@@ -96,7 +156,6 @@ function createButton(container, key, label, allowSort, category) {
     btn.className = 'btn-drill';
     btn.dataset.key = key;
     
-    // 1. Left Icon
     const iconDiv = document.createElement('div');
     iconDiv.className = 'drill-icon';
     for(let i=0; i<4; i++) {
@@ -104,12 +163,10 @@ function createButton(container, key, label, allowSort, category) {
     }
     btn.appendChild(iconDiv);
 
-    // 2. Text Label
     const span = document.createElement('span');
     span.textContent = label;
     btn.appendChild(span);
 
-    // 3. Random Badge
     if (currentDrills[key] && currentDrills[key].random) {
         const rMark = document.createElement('div');
         rMark.className = 'mark-random';
@@ -117,7 +174,6 @@ function createButton(container, key, label, allowSort, category) {
         btn.appendChild(rMark);
     }
     
-    // 4. Grip Icon & Sorting Logic
     if (allowSort) {
         const grip = document.createElement('div');
         grip.className = 'drill-grab-handle';
@@ -165,34 +221,18 @@ function createButton(container, key, label, allowSort, category) {
         btn.appendChild(grip);
     }
     
-    // Click Interaction
     btn.onclick = (e) => {
         if(btn.classList.contains('dragging')) return;
         window.handleDrillClick(key, btn);
     };
 
-    // --- LONG PRESS LOGIC (Corrected for Single Trigger) ---
-    let pressTimer = null;
+    let pressTimer;
     let startX = 0, startY = 0;
-    let isTouch = false; // Flag to filter ghost mouse events
-    let hasExecuted = false; // Flag to prevent double execution per press
     
     const start = (e) => {
         if (e.target.closest('.drill-grab-handle')) return;
-        if (btn.classList.contains('running')) return;
+        if(btn.classList.contains('running')) return;
         
-        // Filter out ghost mouse events if we just touched
-        if (e.type === 'touchstart') {
-            isTouch = true;
-        } else if (e.type === 'mousedown' && isTouch) {
-            return; 
-        }
-
-        // Prevent overlapping timers
-        if (pressTimer) return;
-
-        hasExecuted = false; // Reset execution flag for new press
-
         if (e.type === 'touchstart') {
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
@@ -202,24 +242,12 @@ function createButton(container, key, label, allowSort, category) {
         }
 
         pressTimer = setTimeout(() => {
-            if (navigator.vibrate) navigator.vibrate(70); // Single 70ms pulse
+            if (navigator.vibrate) navigator.vibrate(50);
             openEditor(key);
-            hasExecuted = true;
-            pressTimer = null;
         }, 600);
     };
 
-    const cancel = (e) => {
-        // Clear timer if it hasn't fired yet
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-        }
-        // Reset touch flag after a short delay to allow next interaction
-        if (e && e.type === 'touchend') {
-            setTimeout(() => { isTouch = false; }, 500);
-        }
-    };
+    const cancel = () => clearTimeout(pressTimer);
 
     const move = (e) => {
         if (!pressTimer) return;
@@ -236,19 +264,17 @@ function createButton(container, key, label, allowSort, category) {
         const diffX = Math.abs(curX - startX);
         const diffY = Math.abs(curY - startY);
 
-        // Cancel if moved more than 10px
         if (diffX > 10 || diffY > 10) {
-            cancel();
+            clearTimeout(pressTimer);
+            pressTimer = null;
         }
     };
     
-    // Mouse Events
     btn.addEventListener('mousedown', start);
     btn.addEventListener('mousemove', move);
     btn.addEventListener('mouseup', cancel);
     btn.addEventListener('mouseleave', cancel);
 
-    // Touch Events
     btn.addEventListener('touchstart', start, { passive: true });
     btn.addEventListener('touchmove', move, { passive: true });
     btn.addEventListener('touchend', cancel);
