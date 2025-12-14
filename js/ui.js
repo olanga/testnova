@@ -96,7 +96,11 @@ function createButton(container, key, label, allowSort, category) {
 
         // Prevent click events on grip
         grip.onclick = (e) => e.stopPropagation();
-        grip.onmousedown = (e) => e.stopPropagation(); // prevent ripple/click logic
+        grip.onmousedown = (e) => e.stopPropagation(); 
+
+        // Note: We do NOT stop propagation on touchstart here, 
+        // as that might break mobile drag-and-drop polyfills.
+        // Instead, we handle the exclusion in the 'start' function below.
 
         btn.appendChild(grip);
     }
@@ -109,14 +113,19 @@ function createButton(container, key, label, allowSort, category) {
 
     // Long Press for Editor
     let pressTimer;
-    const start = () => {
+    
+    // UPDATED: 'start' now accepts 'e' and checks for grip handle
+    const start = (e) => {
+        // FIX: If touching the sort handle, do NOT start the editor timer
+        if (e.target.closest('.drill-grab-handle')) return;
+
         if(btn.classList.contains('running')) return;
         pressTimer = setTimeout(() => openEditor(key), 600);
     };
     const end = () => clearTimeout(pressTimer);
     
     btn.onmousedown = start;
-    btn.ontouchstart = start;
+    btn.ontouchstart = start; // This passes 'e' to start
     btn.onmouseup = end;
     btn.onmouseleave = end;
     btn.ontouchend = end;
