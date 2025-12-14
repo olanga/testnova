@@ -171,16 +171,15 @@ function createButton(container, key, label, allowSort, category) {
         window.handleDrillClick(key, btn);
     };
 
-    // --- LONG PRESS LOGIC (Updated with Scroll Detection) ---
+    // --- LONG PRESS LOGIC WITH SCROLL DETECTION ---
     let pressTimer;
-    let startX, startY;
+    let startX = 0, startY = 0;
     
     const start = (e) => {
         if (e.target.closest('.drill-grab-handle')) return;
         if(btn.classList.contains('running')) return;
         
         // Track starting coordinates
-        // Handle both mouse and touch events
         if (e.type === 'touchstart') {
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
@@ -206,11 +205,11 @@ function createButton(container, key, label, allowSort, category) {
             curY = e.clientY;
         }
 
-        // Calculate distance moved
+        // Calculate movement distance
         const diffX = Math.abs(curX - startX);
         const diffY = Math.abs(curY - startY);
 
-        // If moved more than 10 pixels, assume scrolling and cancel timer
+        // Cancel if moved more than 10 pixels (scrolling)
         if (diffX > 10 || diffY > 10) {
             clearTimeout(pressTimer);
             pressTimer = null;
@@ -223,7 +222,7 @@ function createButton(container, key, label, allowSort, category) {
     btn.addEventListener('mouseup', cancel);
     btn.addEventListener('mouseleave', cancel);
 
-    // Touch Events (Passive true for better scroll performance)
+    // Touch Events (Passive true for scrolling performance)
     btn.addEventListener('touchstart', start, { passive: true });
     btn.addEventListener('touchmove', move, { passive: true });
     btn.addEventListener('touchend', cancel);
