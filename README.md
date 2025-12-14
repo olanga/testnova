@@ -23,7 +23,7 @@ A pretty web client for the Nova S Pro table tennis robot. This tool replaces th
 
 **General**
 
-  * **Offline Capable:** Works entirely without internet access.
+  * **Fully customizable drills** Add and remove drills and balls. Share, export and import settings.
   * **Data Persistence:** Settings and drills saved to browser local storage.
   * **Themes:** 4 options, including dark mode.
   * **Stratistics:**  accumulated counters (total balls/drills).<br>
