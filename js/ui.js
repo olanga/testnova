@@ -1,7 +1,81 @@
-import { currentDrills, userCustomDrills, appStats, drillOrder, saveDrillOrder } from './state.js';
+import { currentDrills, userCustomDrills, appStats, drillOrder, saveDrillOrder, saveDrillsToStorage } from './state.js';
 import { bleState } from './bluetooth.js';
 import { showToast } from './utils.js';
 import { openEditor } from './editor.js';
+
+// --- NEW: Drag & Drop to Tab Handlers ---
+
+window.allowTabDrop = (e) => {
+    e.preventDefault(); // Necessary to allow dropping
+};
+
+window.handleTabDrop = (e, targetCat) => {
+    e.preventDefault();
+    const key = e.dataTransfer.getData('text/plain');
+    if (!key) return;
+
+    // 1. Find Source Category
+    let sourceCat = null;
+    let drillObj = null;
+    let drillIndex = -1;
+
+    ['custom-a', 'custom-b', 'custom-c'].forEach(cat => {
+        const idx = userCustomDrills[cat].findIndex(d => d.key === key);
+        if (idx !== -1) {
+            sourceCat = cat;
+            drillIndex = idx;
+            drillObj = userCustomDrills[cat][idx];
+        }
+    });
+
+    // Validations
+    if (!sourceCat) return; // Not a custom drill (cannot move Basic/Combined)
+    if (sourceCat === targetCat) return; // Dropped on same tab
+    if (userCustomDrills[targetCat].length >= 20) {
+        showToast(`Bank ${targetCat.split('-')[1].toUpperCase()} is full!`);
+        return;
+    }
+
+    // 2. Generate New Key for Target Category
+    // Format: cust_A_Name -> cust_B_Name
+    const targetChar = targetCat.split('-')[1].toUpperCase();
+    let newKey = key.replace(/^cust_[ABC]_/i, `cust_${targetChar}_`);
+    
+    // Ensure Uniqueness
+    if (currentDrills[newKey]) {
+        newKey = `${newKey}_${Date.now()}`;
+    }
+
+    // 3. Move Data in State
+    // A. Copy drill parameters
+    currentDrills[newKey] = JSON.parse(JSON.stringify(currentDrills[key]));
+    
+    // B. Add to target list
+    userCustomDrills[targetCat].push({
+        name: drillObj.name,
+        key: newKey
+    });
+
+    // C. Remove from source list
+    userCustomDrills[sourceCat].splice(drillIndex, 1);
+    
+    // D. Delete old drill parameters
+    delete currentDrills[key];
+
+    // 4. Persist
+    localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
+    saveDrillsToStorage();
+
+    // 5. Update UI
+    renderDrillButtons(); // Refresh current view (item will disappear)
+    showToast(`Moved to ${targetChar}`);
+    
+    // Optional: Switch to the target tab to show the item
+    const targetBtn = document.querySelector(`.tab-btn[onclick*="${targetCat}"]`);
+    if(targetBtn) switchTab(targetCat, targetBtn);
+};
+
+// --- EXISTING UI LOGIC ---
 
 export function renderDrillButtons() {
     // Render Basic, Combined, Complex (Sorting ENABLED)
@@ -66,30 +140,27 @@ function createButton(container, key, label, allowSort, category) {
         grip.innerHTML = '≡'; 
         grip.title = "Drag to reorder";
         
-        // --- UPDATED: DRAG LOGIC ---
-        // Default is NOT draggable to prevent conflict with text long-press
-        btn.draggable = false; 
+        // DRAG LOGIC
+        btn.draggable = false; // Default: disable drag to allow long-press on text
 
-        // Only enable dragging when interacting with the GRIP
         const enableDrag = () => { btn.draggable = true; };
         const disableDrag = () => { btn.draggable = false; };
 
         grip.addEventListener('mousedown', enableDrag);
         grip.addEventListener('touchstart', enableDrag, {passive: true});
-        
         grip.addEventListener('mouseup', disableDrag);
         grip.addEventListener('mouseleave', disableDrag);
         grip.addEventListener('touchend', disableDrag);
 
-        // Standard Drag Events (Only fire if draggable=true)
         btn.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', key); // Essential for Tab Drop
             btn.classList.add('dragging');
         });
 
         btn.addEventListener('dragend', () => {
             btn.classList.remove('dragging');
-            btn.draggable = false; // Reset safety
+            btn.draggable = false; 
             handleReorder(container, category);
         });
         
@@ -107,31 +178,23 @@ function createButton(container, key, label, allowSort, category) {
             }
         });
 
-        // Prevent click events on grip from bubbling to button
         grip.onclick = (e) => e.stopPropagation();
-        
         btn.appendChild(grip);
     }
     
-    // Interactions (Click to run)
+    // Click Interaction
     btn.onclick = (e) => {
         if(btn.classList.contains('dragging')) return;
         window.handleDrillClick(key, btn);
     };
 
-    // Long Press for Editor (1000ms)
+    // Long Press Editor
     let pressTimer;
-    
     const start = (e) => {
-        // If touching the grip, ignore (drag logic handles that)
         if (e.target.closest('.drill-grab-handle')) return;
-
         if(btn.classList.contains('running')) return;
-        
-        // Start Editor Timer
         pressTimer = setTimeout(() => openEditor(key), 1000);
     };
-    
     const end = () => clearTimeout(pressTimer);
     
     btn.onmousedown = start;
@@ -147,18 +210,26 @@ function handleReorder(container, category) {
     const buttons = Array.from(container.querySelectorAll('.btn-drill'));
     const newKeys = buttons.map(b => b.dataset.key);
     
+    // If the list size changed (item moved out to a tab), don't reorder here.
+    // The handleTabDrop function handles the removal.
+    // We only reorder if the count matches.
+    
     if (['basic', 'combined', 'complex'].includes(category)) {
-        drillOrder[category] = newKeys;
-        saveDrillOrder();
+        if(newKeys.length === drillOrder[category].length) {
+            drillOrder[category] = newKeys;
+            saveDrillOrder();
+        }
     } else {
-        const oldList = userCustomDrills[category];
-        const newList = [];
-        newKeys.forEach(k => {
-            const item = oldList.find(d => d.key === k);
-            if(item) newList.push(item);
-        });
-        userCustomDrills[category] = newList;
-        localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
+        if(newKeys.length === userCustomDrills[category].length) {
+            const oldList = userCustomDrills[category];
+            const newList = [];
+            newKeys.forEach(k => {
+                const item = oldList.find(d => d.key === k);
+                if(item) newList.push(item);
+            });
+            userCustomDrills[category] = newList;
+            localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
+        }
     }
 }
 
