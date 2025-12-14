@@ -6,7 +6,7 @@ import { openEditor } from './editor.js';
 // --- NEW: Drag & Drop to Tab Handlers ---
 
 window.allowTabDrop = (e) => {
-    e.preventDefault(); // Necessary to allow dropping
+    e.preventDefault(); 
 };
 
 window.handleTabDrop = (e, targetCat) => {
@@ -14,7 +14,6 @@ window.handleTabDrop = (e, targetCat) => {
     const key = e.dataTransfer.getData('text/plain');
     if (!key) return;
 
-    // 1. Find Source Category
     let sourceCat = null;
     let drillObj = null;
     let drillIndex = -1;
@@ -28,49 +27,36 @@ window.handleTabDrop = (e, targetCat) => {
         }
     });
 
-    // Validations
-    if (!sourceCat) return; // Not a custom drill (cannot move Basic/Combined)
-    if (sourceCat === targetCat) return; // Dropped on same tab
+    if (!sourceCat) return; 
+    if (sourceCat === targetCat) return; 
     if (userCustomDrills[targetCat].length >= 20) {
         showToast(`Bank ${targetCat.split('-')[1].toUpperCase()} is full!`);
         return;
     }
 
-    // 2. Generate New Key for Target Category
-    // Format: cust_A_Name -> cust_B_Name
     const targetChar = targetCat.split('-')[1].toUpperCase();
     let newKey = key.replace(/^cust_[ABC]_/i, `cust_${targetChar}_`);
     
-    // Ensure Uniqueness
     if (currentDrills[newKey]) {
         newKey = `${newKey}_${Date.now()}`;
     }
 
-    // 3. Move Data in State
-    // A. Copy drill parameters
     currentDrills[newKey] = JSON.parse(JSON.stringify(currentDrills[key]));
     
-    // B. Add to target list
     userCustomDrills[targetCat].push({
         name: drillObj.name,
         key: newKey
     });
 
-    // C. Remove from source list
     userCustomDrills[sourceCat].splice(drillIndex, 1);
-    
-    // D. Delete old drill parameters
     delete currentDrills[key];
 
-    // 4. Persist
     localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
     saveDrillsToStorage();
 
-    // 5. Update UI
-    renderDrillButtons(); // Refresh current view (item will disappear)
+    renderDrillButtons(); 
     showToast(`Moved to ${targetChar}`);
     
-    // Optional: Switch to the target tab to show the item
     const targetBtn = document.querySelector(`.tab-btn[onclick*="${targetCat}"]`);
     if(targetBtn) switchTab(targetCat, targetBtn);
 };
@@ -78,7 +64,6 @@ window.handleTabDrop = (e, targetCat) => {
 // --- EXISTING UI LOGIC ---
 
 export function renderDrillButtons() {
-    // Render Basic, Combined, Complex (Sorting ENABLED)
     ['basic', 'combined', 'complex'].forEach(cat => {
         const container = document.getElementById(`view-${cat}`);
         if (!container) return;
@@ -92,7 +77,6 @@ export function renderDrillButtons() {
         }
     });
 
-    // Render Custom (Sorting ENABLED)
     ['custom-a', 'custom-b', 'custom-c'].forEach(cat => {
         const container = document.getElementById(`view-${cat}`);
         if (!container) return;
@@ -140,8 +124,7 @@ function createButton(container, key, label, allowSort, category) {
         grip.innerHTML = '≡'; 
         grip.title = "Drag to reorder";
         
-        // DRAG LOGIC
-        btn.draggable = false; // Default: disable drag to allow long-press on text
+        btn.draggable = false; 
 
         const enableDrag = () => { btn.draggable = true; };
         const disableDrag = () => { btn.draggable = false; };
@@ -154,7 +137,7 @@ function createButton(container, key, label, allowSort, category) {
 
         btn.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', key); // Essential for Tab Drop
+            e.dataTransfer.setData('text/plain', key); 
             btn.classList.add('dragging');
         });
 
@@ -188,20 +171,63 @@ function createButton(container, key, label, allowSort, category) {
         window.handleDrillClick(key, btn);
     };
 
-    // Long Press Editor
+    // --- LONG PRESS LOGIC (Updated with Scroll Detection) ---
     let pressTimer;
+    let startX, startY;
+    
     const start = (e) => {
         if (e.target.closest('.drill-grab-handle')) return;
         if(btn.classList.contains('running')) return;
+        
+        // Track starting coordinates
+        // Handle both mouse and touch events
+        if (e.type === 'touchstart') {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        } else {
+            startX = e.clientX;
+            startY = e.clientY;
+        }
+
         pressTimer = setTimeout(() => openEditor(key), 1000);
     };
-    const end = () => clearTimeout(pressTimer);
+
+    const cancel = () => clearTimeout(pressTimer);
+
+    const move = (e) => {
+        if (!pressTimer) return;
+
+        let curX, curY;
+        if (e.type === 'touchmove') {
+            curX = e.touches[0].clientX;
+            curY = e.touches[0].clientY;
+        } else {
+            curX = e.clientX;
+            curY = e.clientY;
+        }
+
+        // Calculate distance moved
+        const diffX = Math.abs(curX - startX);
+        const diffY = Math.abs(curY - startY);
+
+        // If moved more than 10 pixels, assume scrolling and cancel timer
+        if (diffX > 10 || diffY > 10) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+    };
     
-    btn.onmousedown = start;
-    btn.ontouchstart = start; 
-    btn.onmouseup = end;
-    btn.onmouseleave = end;
-    btn.ontouchend = end;
+    // Mouse Events
+    btn.addEventListener('mousedown', start);
+    btn.addEventListener('mousemove', move);
+    btn.addEventListener('mouseup', cancel);
+    btn.addEventListener('mouseleave', cancel);
+
+    // Touch Events (Passive true for better scroll performance)
+    btn.addEventListener('touchstart', start, { passive: true });
+    btn.addEventListener('touchmove', move, { passive: true });
+    btn.addEventListener('touchend', cancel);
+    btn.addEventListener('touchcancel', cancel);
 
     container.appendChild(btn);
 }
@@ -209,10 +235,6 @@ function createButton(container, key, label, allowSort, category) {
 function handleReorder(container, category) {
     const buttons = Array.from(container.querySelectorAll('.btn-drill'));
     const newKeys = buttons.map(b => b.dataset.key);
-    
-    // If the list size changed (item moved out to a tab), don't reorder here.
-    // The handleTabDrop function handles the removal.
-    // We only reorder if the count matches.
     
     if (['basic', 'combined', 'complex'].includes(category)) {
         if(newKeys.length === drillOrder[category].length) {
