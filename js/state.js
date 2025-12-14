@@ -1,8 +1,10 @@
-import { DEFAULT_DRILLS, RPM_MIN, RPM_MAX, SPIN_LIMITS } from './constants.js';
+import { DEFAULT_DRILLS, RPM_MIN, RPM_MAX, SPIN_LIMITS, CATEGORIES } from './constants.js';
 import { showToast } from './utils.js';
 
 export let currentDrills = {};
 export let userCustomDrills = { "custom-a": [], "custom-b": [], "custom-c": [] };
+// NEW: State to hold the sort order of preprogrammed drills
+export let drillOrder = JSON.parse(JSON.stringify(CATEGORIES)); 
 export let selectedLevel = 1;
 export let runMode = "reps";
 export let appStats = { balls: 0, drills: 0 };
@@ -16,6 +18,18 @@ export function initData() {
     const savedDrills = localStorage.getItem('custom_drills');
     const userDefaults = localStorage.getItem('user_defaults');
     const customData = localStorage.getItem('custom_data');
+    
+    // NEW: Load saved order for preprogrammed drills
+    const savedOrder = localStorage.getItem('drill_order');
+    if (savedOrder) {
+        try {
+            const parsedOrder = JSON.parse(savedOrder);
+            // Merge logic: Use saved order for known categories
+            ['basic', 'combined', 'complex'].forEach(cat => {
+                if(parsedOrder[cat]) drillOrder[cat] = parsedOrder[cat];
+            });
+        } catch(e) { console.error("Error loading drill order", e); }
+    }
 
     currentDrills = savedDrills ? JSON.parse(savedDrills) : 
                    (userDefaults ? JSON.parse(userDefaults) : JSON.parse(JSON.stringify(DEFAULT_DRILLS)));
@@ -41,6 +55,12 @@ function normalizeDrills() {
 export function setLevel(lvl) { selectedLevel = lvl; }
 export function setMode(mode) { runMode = mode; }
 export function saveDrillsToStorage() { localStorage.setItem('custom_drills', JSON.stringify(currentDrills)); }
+
+// NEW: Save the order of preprogrammed drills
+export function saveDrillOrder() {
+    localStorage.setItem('drill_order', JSON.stringify(drillOrder));
+}
+
 export function saveAsDefault() {
     if(confirm("Save current settings as your new personal default?")) {
         localStorage.setItem('user_defaults', JSON.stringify(currentDrills));
@@ -51,6 +71,11 @@ export function resetToDefault() {
     const hasUserDefault = localStorage.getItem('user_defaults');
     if(confirm(hasUserDefault ? "Restore saved defaults?" : "Restore factory settings?")) {
         currentDrills = hasUserDefault ? JSON.parse(hasUserDefault) : JSON.parse(JSON.stringify(DEFAULT_DRILLS));
+        
+        // Reset order to factory default from constants
+        drillOrder = JSON.parse(JSON.stringify(CATEGORIES));
+        localStorage.removeItem('drill_order');
+        
         normalizeDrills();
         localStorage.setItem('custom_drills', JSON.stringify(currentDrills));
         showToast("Restored");
@@ -113,7 +138,7 @@ export function importCustomDrills(csvText) {
 
             const catCode = parts[0].trim();
             const ballNum = parseFloat(parts[1]); 
-            const name = parts[2].trim().substring(0, 32);
+            const name = parts[2].trim().substring(0, 40);
             const category = getCat(catCode);
             if (!category) return;
 

@@ -1,42 +1,45 @@
-import { CATEGORIES } from './constants.js';
-import { currentDrills, userCustomDrills, appStats } from './state.js';
+import { currentDrills, userCustomDrills, appStats, drillOrder, saveDrillOrder } from './state.js';
 import { bleState } from './bluetooth.js';
 import { showToast } from './utils.js';
 import { openEditor } from './editor.js';
 
 export function renderDrillButtons() {
-    // Render Basic, Combined, Complex
+    // Render Basic, Combined, Complex (Sorting ENABLED)
     ['basic', 'combined', 'complex'].forEach(cat => {
         const container = document.getElementById(`view-${cat}`);
         if (!container) return;
         container.innerHTML = '';
         
-        CATEGORIES[cat].forEach(key => {
-            if (!currentDrills[key]) return; // Safety check
-            createButton(container, key, formatDrillName(key));
-        });
+        // Use mutable drillOrder from state instead of immutable CATEGORIES
+        if (drillOrder[cat]) {
+            drillOrder[cat].forEach(key => {
+                if (!currentDrills[key]) return; 
+                createButton(container, key, formatDrillName(key), true, cat); // True = sorting enabled
+            });
+        }
     });
 
-    // Render Custom
+    // Render Custom (Sorting ENABLED)
     ['custom-a', 'custom-b', 'custom-c'].forEach(cat => {
         const container = document.getElementById(`view-${cat}`);
         if (!container) return;
         container.innerHTML = '';
         if (userCustomDrills[cat].length === 0) {
-            container.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#999; padding:20px; font-size:0.8rem;">No drills imported.<br>Use Settings > Import CSV</div>';
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-light); font-size:0.8rem;">No drills imported.<br>Use Settings > Import</div>';
         } else {
             userCustomDrills[cat].forEach(item => {
-                createButton(container, item.key, item.name);
+                createButton(container, item.key, item.name, true, cat);
             });
         }
     });
 }
 
-function createButton(container, key, label) {
+function createButton(container, key, label, allowSort, category) {
     const btn = document.createElement('button');
     btn.className = 'btn-drill';
     btn.dataset.key = key;
     
+    // 1. Left Icon (Visual)
     const iconDiv = document.createElement('div');
     iconDiv.className = 'drill-icon';
     for(let i=0; i<4; i++) {
@@ -44,6 +47,12 @@ function createButton(container, key, label) {
     }
     btn.appendChild(iconDiv);
 
+    // 2. Text Label
+    const span = document.createElement('span');
+    span.textContent = label;
+    btn.appendChild(span);
+
+    // 3. Random Badge (Placed right of text, left of grip)
     if (currentDrills[key] && currentDrills[key].random) {
         const rMark = document.createElement('div');
         rMark.className = 'mark-random';
@@ -51,23 +60,58 @@ function createButton(container, key, label) {
         btn.appendChild(rMark);
     }
     
-    const span = document.createElement('span');
-    span.textContent = label;
-    btn.appendChild(span);
+    // 4. Grip Icon (Far Right) & Sorting Logic
+    if (allowSort) {
+        const grip = document.createElement('div');
+        grip.className = 'drill-grab-handle';
+        grip.innerHTML = '≡'; 
+        grip.title = "Drag to reorder";
+        
+        // --- Drag & Drop Events ---
+        btn.draggable = true;
+
+        btn.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            btn.classList.add('dragging');
+        });
+
+        btn.addEventListener('dragend', () => {
+            btn.classList.remove('dragging');
+            handleReorder(container, category);
+        });
+        
+        btn.addEventListener('dragover', (e) => {
+            e.preventDefault(); 
+            const draggingItem = container.querySelector('.dragging');
+            if (draggingItem && draggingItem !== btn) {
+                const box = btn.getBoundingClientRect();
+                const offset = e.clientY - box.top - (box.height / 2);
+                if (offset < 0) {
+                    container.insertBefore(draggingItem, btn);
+                } else {
+                    container.insertBefore(draggingItem, btn.nextSibling);
+                }
+            }
+        });
+
+        // Prevent click events on grip
+        grip.onclick = (e) => e.stopPropagation();
+        grip.onmousedown = (e) => e.stopPropagation(); // prevent ripple/click logic
+
+        btn.appendChild(grip);
+    }
     
-    // Interactions
-    btn.onclick = () => window.handleDrillClick(key, btn);
+    // Interactions (Click to run)
+    btn.onclick = (e) => {
+        if(btn.classList.contains('dragging')) return;
+        window.handleDrillClick(key, btn);
+    };
 
     // Long Press for Editor
     let pressTimer;
-    let longPressHandled = false;
     const start = () => {
         if(btn.classList.contains('running')) return;
-        longPressHandled = false;
-        pressTimer = setTimeout(() => {
-            longPressHandled = true;
-            openEditor(key);
-        }, 600);
+        pressTimer = setTimeout(() => openEditor(key), 600);
     };
     const end = () => clearTimeout(pressTimer);
     
@@ -80,6 +124,29 @@ function createButton(container, key, label) {
     container.appendChild(btn);
 }
 
+function handleReorder(container, category) {
+    // 1. Read new order from DOM
+    const buttons = Array.from(container.querySelectorAll('.btn-drill'));
+    const newKeys = buttons.map(b => b.dataset.key);
+    
+    // 2. Logic Split: Preprogrammed vs Custom
+    if (['basic', 'combined', 'complex'].includes(category)) {
+        // Update the sequence list directly
+        drillOrder[category] = newKeys;
+        saveDrillOrder();
+    } else {
+        // Custom drills are array of objects, map keys back to objects
+        const oldList = userCustomDrills[category];
+        const newList = [];
+        newKeys.forEach(k => {
+            const item = oldList.find(d => d.key === k);
+            if(item) newList.push(item);
+        });
+        userCustomDrills[category] = newList;
+        localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
+    }
+}
+
 export function updateDrillButtonStates() {
     const btns = document.querySelectorAll('.btn-drill');
     btns.forEach(b => {
@@ -89,16 +156,18 @@ export function updateDrillButtonStates() {
     const btnConnect = document.getElementById('btn-connect');
     const statusText = document.getElementById('status-text');
     
-    if (bleState.isConnected) {
-        btnConnect.textContent = "Disconnect";
-        btnConnect.classList.add('connected');
-        statusText.textContent = "Connected";
-        statusText.style.color = "#00b894";
-    } else {
-        btnConnect.textContent = "Connect";
-        btnConnect.classList.remove('connected');
-        statusText.textContent = "Disconnected";
-        statusText.style.color = "var(--text-light)";
+    if (btnConnect && statusText) {
+        if (bleState.isConnected) {
+            btnConnect.textContent = "Disconnect";
+            btnConnect.classList.add('connected');
+            statusText.textContent = "Connected";
+            statusText.style.color = "#00b894";
+        } else {
+            btnConnect.textContent = "Connect";
+            btnConnect.classList.remove('connected');
+            statusText.textContent = "Disconnected";
+            statusText.style.color = "var(--text-light)";
+        }
     }
 }
 
@@ -108,7 +177,8 @@ export function updateStatsUI() {
 }
 
 export function toggleMenu() {
-    document.getElementById('theme-menu').classList.toggle('open');
+    const m = document.getElementById('theme-menu');
+    if(m) m.classList.toggle('open');
 }
 
 export function setTheme(themeName) {
@@ -123,13 +193,15 @@ export function switchTab(catName, btn) {
         const el = document.getElementById('view-'+c);
         if(el) el.classList.add('hidden');
     });
-    document.getElementById('view-' + catName).classList.remove('hidden');
+    const target = document.getElementById('view-' + catName);
+    if(target) target.classList.remove('hidden');
     
     document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
     if(btn) btn.classList.add('active');
 
     const diffGroup = document.getElementById('grp-difficulty');
     if(diffGroup) {
+        // Hide difficulty selector for custom drills as they have internal physics
         diffGroup.style.display = ['custom-a', 'custom-b', 'custom-c'].includes(catName) ? 'none' : 'flex';
     }
 }
