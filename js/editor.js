@@ -122,6 +122,7 @@ function renderEditor() {
         const isSingle = stepOptions.length === 1;
         const isRnd = isSingle && !!stepOptions[0][10];
 
+        // Duplicate/Next Step Button (Icon: Two overlapping squares)
         const plusBtn = `
             <button class="btn-add-opt" title="Duplicate Ball" onclick="window.handleAddSequenceStep(${stepIndex})">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -163,6 +164,7 @@ function renderEditor() {
             const type = ballParams[9];
             const currentMaxSpin = SPIN_LIMITS[speed.toString()] ?? 10;
             
+            // BPM Calculation: 30 + (Percent * 0.6)
             const bpmValue = Math.round(30 + (ballParams[4] * 0.6));
 
             const optDiv = document.createElement('div');
@@ -244,6 +246,7 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     let val = parseFloat(value);
     if(isNaN(val)) val = 0;
 
+    // Convert BPM input (30-90) back to internal percent (0-100)
     if (paramIdx === 4) {
         let percent = (val - 30) / 0.6;
         ball[paramIdx] = clamp(percent, 0, 100);
@@ -469,6 +472,7 @@ function updateTitleDisplay(key) {
     }
 }
 
+// --- REVERTED: Byte 3 set back to 1 ---
 window.handleTestBall = async (stepIdx, optIdx) => {
     if (!bleState.isConnected) { showToast("Device not connected"); return; }
     const d = tempDrillData[stepIdx][optIdx];
@@ -476,12 +480,15 @@ window.handleTestBall = async (stepIdx, optIdx) => {
     const buffer = new ArrayBuffer(31); 
     const view = new DataView(buffer);
     view.setUint8(0, 0x81); view.setUint16(1, 28, true); 
-    view.setUint8(3, 1); view.setUint16(4, 1, true); view.setUint8(6, 0);
+    view.setUint8(3, 1); // Set to 1
+    view.setUint16(4, 1, true); 
+    view.setUint8(6, 0);
     new Uint8Array(buffer).set(ballData, 7);
     try { await sendPacket(new Uint8Array(buffer)); showToast("Test Ball Fired"); } 
     catch (e) { console.error(e); showToast("Test Failed"); }
 };
 
+// --- REVERTED: Byte 3 set back to 1 ---
 window.handleTestCombo = async () => {
     if (!bleState.isConnected) { showToast("Device not connected"); return; }
     if (!tempDrillData || tempDrillData.length === 0) return;
@@ -507,7 +514,9 @@ window.handleTestCombo = async () => {
     const view = new DataView(buffer);
     const uint8 = new Uint8Array(buffer);
     view.setUint8(0, 0x81); view.setUint16(1, 4 + (balls.length * 24), true); 
-    view.setUint8(3, 1); view.setUint16(4, 1, true); view.setUint8(3, 0);
+    view.setUint8(3, 1); // Set to 1
+    view.setUint16(4, 1, true); 
+    view.setUint8(6, 0);
     let offset = 7;
     balls.forEach(b => { uint8.set(b, offset); offset += 24; });
     try { await sendPacket(uint8); showToast("Testing Drill..."); } 
