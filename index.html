@@ -88,13 +88,23 @@
         <div class="tab-btn" onclick="switchTab('complex', this)">
             <div class="icon-grid"><div class="icon-dot"></div><div class="icon-dot"></div><div class="icon-dot"></div><div class="icon-dot"></div></div> Complex
         </div>
-        <div class="tab-btn" onclick="switchTab('custom-a', this)">
+        
+        <div class="tab-btn" 
+             onclick="switchTab('custom-a', this)"
+             ondrop="window.handleTabDrop(event, 'custom-a')" 
+             ondragover="window.allowTabDrop(event)">
             <div class="icon-grid"><div class="icon-dot"></div><div class="icon-dot"></div><div class="icon-dot"></div><div class="icon-dot"></div></div> Custom A
         </div>
-        <div class="tab-btn" onclick="switchTab('custom-b', this)">
+        <div class="tab-btn" 
+             onclick="switchTab('custom-b', this)"
+             ondrop="window.handleTabDrop(event, 'custom-b')" 
+             ondragover="window.allowTabDrop(event)">
             <div class="icon-grid"><div class="icon-dot"></div><div class="icon-dot"></div><div class="icon-dot"></div><div class="icon-dot"></div></div> Custom B
         </div>
-        <div class="tab-btn" onclick="switchTab('custom-c', this)">
+        <div class="tab-btn" 
+             onclick="switchTab('custom-c', this)"
+             ondrop="window.handleTabDrop(event, 'custom-c')" 
+             ondragover="window.allowTabDrop(event)">
             <div class="icon-grid"><div class="icon-dot"></div><div class="icon-dot"></div><div class="icon-dot"></div><div class="icon-dot"></div></div> Custom C
         </div>
     </div>
@@ -108,7 +118,7 @@
 
     <div class="footer-row">
         <div id="stats-display">Balls: 0 | Drills: 0</div>
-        <div>Version 2.1c</div>
+        <div>Version 2.1d</div>
     </div>
     
     <div id="log" class="log-box"></div>
