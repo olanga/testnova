@@ -171,14 +171,28 @@ function createButton(container, key, label, allowSort, category) {
         window.handleDrillClick(key, btn);
     };
 
-    // --- LONG PRESS LOGIC (Updated 600ms + Vibration) ---
-    let pressTimer;
+    // --- LONG PRESS LOGIC (Corrected for Single Trigger) ---
+    let pressTimer = null;
     let startX = 0, startY = 0;
+    let isTouch = false; // Flag to filter ghost mouse events
+    let hasExecuted = false; // Flag to prevent double execution per press
     
     const start = (e) => {
         if (e.target.closest('.drill-grab-handle')) return;
-        if(btn.classList.contains('running')) return;
+        if (btn.classList.contains('running')) return;
         
+        // Filter out ghost mouse events if we just touched
+        if (e.type === 'touchstart') {
+            isTouch = true;
+        } else if (e.type === 'mousedown' && isTouch) {
+            return; 
+        }
+
+        // Prevent overlapping timers
+        if (pressTimer) return;
+
+        hasExecuted = false; // Reset execution flag for new press
+
         if (e.type === 'touchstart') {
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
@@ -187,14 +201,25 @@ function createButton(container, key, label, allowSort, category) {
             startY = e.clientY;
         }
 
-        // Reverted to 600ms and added vibration
         pressTimer = setTimeout(() => {
-            if (navigator.vibrate) navigator.vibrate(50);
+            if (navigator.vibrate) navigator.vibrate(70); // Single 70ms pulse
             openEditor(key);
+            hasExecuted = true;
+            pressTimer = null;
         }, 600);
     };
 
-    const cancel = () => clearTimeout(pressTimer);
+    const cancel = (e) => {
+        // Clear timer if it hasn't fired yet
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+        // Reset touch flag after a short delay to allow next interaction
+        if (e && e.type === 'touchend') {
+            setTimeout(() => { isTouch = false; }, 500);
+        }
+    };
 
     const move = (e) => {
         if (!pressTimer) return;
@@ -211,9 +236,9 @@ function createButton(container, key, label, allowSort, category) {
         const diffX = Math.abs(curX - startX);
         const diffY = Math.abs(curY - startY);
 
+        // Cancel if moved more than 10px
         if (diffX > 10 || diffY > 10) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
+            cancel();
         }
     };
     
