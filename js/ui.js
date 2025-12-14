@@ -10,11 +10,10 @@ export function renderDrillButtons() {
         if (!container) return;
         container.innerHTML = '';
         
-        // Use mutable drillOrder from state instead of immutable CATEGORIES
         if (drillOrder[cat]) {
             drillOrder[cat].forEach(key => {
                 if (!currentDrills[key]) return; 
-                createButton(container, key, formatDrillName(key), true, cat); // True = sorting enabled
+                createButton(container, key, formatDrillName(key), true, cat); 
             });
         }
     });
@@ -39,7 +38,7 @@ function createButton(container, key, label, allowSort, category) {
     btn.className = 'btn-drill';
     btn.dataset.key = key;
     
-    // 1. Left Icon (Visual)
+    // 1. Left Icon
     const iconDiv = document.createElement('div');
     iconDiv.className = 'drill-icon';
     for(let i=0; i<4; i++) {
@@ -52,7 +51,7 @@ function createButton(container, key, label, allowSort, category) {
     span.textContent = label;
     btn.appendChild(span);
 
-    // 3. Random Badge (Placed right of text, left of grip)
+    // 3. Random Badge
     if (currentDrills[key] && currentDrills[key].random) {
         const rMark = document.createElement('div');
         rMark.className = 'mark-random';
@@ -60,16 +59,29 @@ function createButton(container, key, label, allowSort, category) {
         btn.appendChild(rMark);
     }
     
-    // 4. Grip Icon (Far Right) & Sorting Logic
+    // 4. Grip Icon & Sorting Logic
     if (allowSort) {
         const grip = document.createElement('div');
         grip.className = 'drill-grab-handle';
         grip.innerHTML = '≡'; 
         grip.title = "Drag to reorder";
         
-        // --- Drag & Drop Events ---
-        btn.draggable = true;
+        // --- UPDATED: DRAG LOGIC ---
+        // Default is NOT draggable to prevent conflict with text long-press
+        btn.draggable = false; 
 
+        // Only enable dragging when interacting with the GRIP
+        const enableDrag = () => { btn.draggable = true; };
+        const disableDrag = () => { btn.draggable = false; };
+
+        grip.addEventListener('mousedown', enableDrag);
+        grip.addEventListener('touchstart', enableDrag, {passive: true});
+        
+        grip.addEventListener('mouseup', disableDrag);
+        grip.addEventListener('mouseleave', disableDrag);
+        grip.addEventListener('touchend', disableDrag);
+
+        // Standard Drag Events (Only fire if draggable=true)
         btn.addEventListener('dragstart', (e) => {
             e.dataTransfer.effectAllowed = 'move';
             btn.classList.add('dragging');
@@ -77,6 +89,7 @@ function createButton(container, key, label, allowSort, category) {
 
         btn.addEventListener('dragend', () => {
             btn.classList.remove('dragging');
+            btn.draggable = false; // Reset safety
             handleReorder(container, category);
         });
         
@@ -94,10 +107,9 @@ function createButton(container, key, label, allowSort, category) {
             }
         });
 
-        // Prevent click events on grip
+        // Prevent click events on grip from bubbling to button
         grip.onclick = (e) => e.stopPropagation();
-        grip.onmousedown = (e) => e.stopPropagation(); 
-
+        
         btn.appendChild(grip);
     }
     
@@ -107,18 +119,19 @@ function createButton(container, key, label, allowSort, category) {
         window.handleDrillClick(key, btn);
     };
 
-    // Long Press for Editor
+    // Long Press for Editor (1000ms)
     let pressTimer;
     
     const start = (e) => {
-        // If touching the sort handle, do NOT start the editor timer
+        // If touching the grip, ignore (drag logic handles that)
         if (e.target.closest('.drill-grab-handle')) return;
 
         if(btn.classList.contains('running')) return;
         
-        // UPDATED: Increased delay from 600ms to 1000ms (1 second)
+        // Start Editor Timer
         pressTimer = setTimeout(() => openEditor(key), 1000);
     };
+    
     const end = () => clearTimeout(pressTimer);
     
     btn.onmousedown = start;
@@ -131,17 +144,13 @@ function createButton(container, key, label, allowSort, category) {
 }
 
 function handleReorder(container, category) {
-    // 1. Read new order from DOM
     const buttons = Array.from(container.querySelectorAll('.btn-drill'));
     const newKeys = buttons.map(b => b.dataset.key);
     
-    // 2. Logic Split: Preprogrammed vs Custom
     if (['basic', 'combined', 'complex'].includes(category)) {
-        // Update the sequence list directly
         drillOrder[category] = newKeys;
         saveDrillOrder();
     } else {
-        // Custom drills are array of objects, map keys back to objects
         const oldList = userCustomDrills[category];
         const newList = [];
         newKeys.forEach(k => {
@@ -207,7 +216,6 @@ export function switchTab(catName, btn) {
 
     const diffGroup = document.getElementById('grp-difficulty');
     if(diffGroup) {
-        // Hide difficulty selector for custom drills as they have internal physics
         diffGroup.style.display = ['custom-a', 'custom-b', 'custom-c'].includes(catName) ? 'none' : 'flex';
     }
 }
