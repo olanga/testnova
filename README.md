@@ -17,7 +17,7 @@ A pretty web client for the Nova S Pro table tennis robot. This tool replaces th
 
 **Requirements:**
 
-  * Chrome or Chromium-based browser.
+  * Chrome or Chromium-based browser. iPhone is not supported as it uses Webkit browser engine.
 
 ## Features
 
