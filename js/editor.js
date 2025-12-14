@@ -122,7 +122,6 @@ function renderEditor() {
         const isSingle = stepOptions.length === 1;
         const isRnd = isSingle && !!stepOptions[0][10];
 
-        // --- UPDATED: Tooltip changed to 'Duplicate Ball' ---
         const plusBtn = `
             <button class="btn-add-opt" title="Duplicate Ball" onclick="window.handleAddSequenceStep(${stepIndex})">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -163,6 +162,8 @@ function renderEditor() {
             const spin = ballParams[8];
             const type = ballParams[9];
             const currentMaxSpin = SPIN_LIMITS[speed.toString()] ?? 10;
+            
+            const bpmValue = Math.round(30 + (ballParams[4] * 0.6));
 
             const optDiv = document.createElement('div');
             optDiv.className = 'option-card';
@@ -201,8 +202,8 @@ function renderEditor() {
                             oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, 3, this.value)">
                     </div>
                     <div class="editor-field">
-                        <div class="field-header"><label>Freq</label><span class="range-hint">0-100</span></div>
-                        <input type="number" value="${ballParams[4]}" step="10" min="0" max="100"
+                        <div class="field-header"><label>BPM</label><span class="range-hint">30-90</span></div>
+                        <input type="number" value="${bpmValue}" step="1" min="30" max="90"
                             oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, 4, this.value)">
                     </div>
                     <div class="editor-field">
@@ -242,15 +243,24 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     const ball = tempDrillData[stepIdx][optIdx];
     let val = parseFloat(value);
     if(isNaN(val)) val = 0;
-    ball[paramIdx] = val;
+
+    if (paramIdx === 4) {
+        let percent = (val - 30) / 0.6;
+        ball[paramIdx] = clamp(percent, 0, 100);
+    } else {
+        ball[paramIdx] = val;
+    }
+
     if (paramIdx === 7) { 
         const maxAllowed = SPIN_LIMITS[val.toString()] ?? 10;
         if (ball[8] > maxAllowed) ball[8] = maxAllowed;
+        
         const spinInput = document.getElementById(`inp-spin-${stepIdx}-${optIdx}`);
         const spinLabel = document.getElementById(`lbl-spin-${stepIdx}-${optIdx}`);
         if (spinInput) { spinInput.max = maxAllowed; spinInput.value = ball[8]; }
         if (spinLabel) spinLabel.textContent = `Max ${maxAllowed}`;
     }
+
     if (paramIdx === 7 || paramIdx === 8) {
         const res = calculateRPMs(ball[7], ball[8], ball[9]);
         ball[0] = res.top; ball[1] = res.bot;

@@ -3,7 +3,6 @@ import { showToast } from './utils.js';
 
 export let currentDrills = {};
 export let userCustomDrills = { "custom-a": [], "custom-b": [], "custom-c": [] };
-// NEW: State to hold the sort order of preprogrammed drills
 export let drillOrder = JSON.parse(JSON.stringify(CATEGORIES)); 
 export let selectedLevel = 1;
 export let runMode = "reps";
@@ -19,12 +18,10 @@ export function initData() {
     const userDefaults = localStorage.getItem('user_defaults');
     const customData = localStorage.getItem('custom_data');
     
-    // NEW: Load saved order for preprogrammed drills
     const savedOrder = localStorage.getItem('drill_order');
     if (savedOrder) {
         try {
             const parsedOrder = JSON.parse(savedOrder);
-            // Merge logic: Use saved order for known categories
             ['basic', 'combined', 'complex'].forEach(cat => {
                 if(parsedOrder[cat]) drillOrder[cat] = parsedOrder[cat];
             });
@@ -56,7 +53,6 @@ export function setLevel(lvl) { selectedLevel = lvl; }
 export function setMode(mode) { runMode = mode; }
 export function saveDrillsToStorage() { localStorage.setItem('custom_drills', JSON.stringify(currentDrills)); }
 
-// NEW: Save the order of preprogrammed drills
 export function saveDrillOrder() {
     localStorage.setItem('drill_order', JSON.stringify(drillOrder));
 }
@@ -71,11 +67,8 @@ export function resetToDefault() {
     const hasUserDefault = localStorage.getItem('user_defaults');
     if(confirm(hasUserDefault ? "Restore saved defaults?" : "Restore factory settings?")) {
         currentDrills = hasUserDefault ? JSON.parse(hasUserDefault) : JSON.parse(JSON.stringify(DEFAULT_DRILLS));
-        
-        // Reset order to factory default from constants
         drillOrder = JSON.parse(JSON.stringify(CATEGORIES));
         localStorage.removeItem('drill_order');
-        
         normalizeDrills();
         localStorage.setItem('custom_drills', JSON.stringify(currentDrills));
         showToast("Restored");
@@ -146,17 +139,23 @@ export function importCustomDrills(csvText) {
             let spin = parseFloat(parts[4]);
             const type = parts[5].trim().toLowerCase(); 
 
-            // --- STRICT IMPORT LIMITS ---
+            // Constraints
             const maxAllowed = SPIN_LIMITS[speed.toString()] ?? 10;
             if (spin > maxAllowed) spin = maxAllowed;
 
             const height = parseInt(parts[6]);
             const drop = parseFloat(parts[7]);
-            const freq = parseInt(parts[8]);
+            
+            // --- UPDATED: BPM Import Logic ---
+            // CSV has BPM (30-90). Convert to internal freq % (0-100)
+            const bpm = parseInt(parts[8]);
+            const freqPercent = (bpm - 30) / 0.6;
+            
             const reps = parseInt(parts[9]);
 
             const motors = calculateRPMs(speed, spin, type);
-            const params = [motors.top, motors.bot, height, drop, freq, reps, 1, speed, spin, type];
+            // param index 4 uses converted freqPercent
+            const params = [motors.top, motors.bot, height, drop, freqPercent, reps, 1, speed, spin, type];
             const key = `cust_${catCode}_${name.replace(/\s+/g, '_')}`;
 
             if (!builder[key]) {
@@ -186,7 +185,8 @@ export function importCustomDrills(csvText) {
 }
 
 export function exportCustomDrills() {
-    let csvContent = "Set;Ball;Name;Speed;Spin;Type;Height;Drop;Freq;Reps\n";
+    // UPDATED: Header changed Freq -> BPM
+    let csvContent = "Set;Ball;Name;Speed;Spin;Type;Height;Drop;BPM;Reps\n";
     const cats = { 'custom-a': 'A', 'custom-b': 'B', 'custom-c': 'C' };
     
     for (let catKey in cats) {
@@ -204,7 +204,12 @@ export function exportCustomDrills() {
                                  const rev = reverseCalculate(ball[0], ball[1]);
                                  speed = rev.speed; spin = rev.spin; type = rev.type;
                              }
-                             const row = [setLabel, ballNum, drill.name, speed, spin, type, ball[2], ball[3], ball[4], ball[5]].join(";");
+                             
+                             // --- UPDATED: Export Logic ---
+                             // Convert internal % (ball[4]) to BPM for CSV
+                             const bpm = Math.round(30 + (ball[4] * 0.6));
+                             
+                             const row = [setLabel, ballNum, drill.name, speed, spin, type, ball[2], ball[3], bpm, ball[5]].join(";");
                              csvContent += row + "\n";
                          });
                     });
