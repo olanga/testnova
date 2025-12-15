@@ -114,15 +114,12 @@ function formatNameForKey(key) {
     return key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
-// --- IMPORT FUNCTION (Restored Name) ---
+// --- IMPORT FUNCTION (Closes Menu on Success) ---
 export function importCustomDrills(csvText) {
     try {
         const lines = csvText.split(/\r?\n/);
-        
-        // 1. Prepare Data Containers
         const newCustomData = { "custom-a": [], "custom-b": [], "custom-c": [] };
         
-        // Clear existing custom drills to avoid orphans
         for (let cat in userCustomDrills) {
             userCustomDrills[cat].forEach(drill => { if (currentDrills[drill.key]) delete currentDrills[drill.key]; });
         }
@@ -163,7 +160,6 @@ export function importCustomDrills(csvText) {
             const height = parseInt(parts[6]);
             const drop = parseFloat(parts[7]);
             
-            // BPM Import
             const bpm = parseInt(parts[8]);
             const freqPercent = (bpm - 30) / 0.6;
             
@@ -173,7 +169,6 @@ export function importCustomDrills(csvText) {
             const params = [motors.top, motors.bot, height, drop, freqPercent, reps, 1, speed, spin, type];
 
             if (category.startsWith('custom')) {
-                // CUSTOM DRILL
                 const name = nameRaw.substring(0, 40);
                 const key = `cust_${category.split('-')[1].toUpperCase()}_${name.replace(/\s+/g, '_')}`;
 
@@ -187,7 +182,6 @@ export function importCustomDrills(csvText) {
                     customBuilder[key][lvl][ballNum].push(params);
                 }
             } else {
-                // FACTORY DRILL
                 const lvlMatch = nameRaw.match(/\(Lvl (\d)\)$/i);
                 let level = 1;
                 let realName = nameRaw;
@@ -206,7 +200,6 @@ export function importCustomDrills(csvText) {
             }
         });
 
-        // Save Custom
         for (let key in customBuilder) {
             currentDrills[key] = {};
             for(let lvl=1; lvl<=3; lvl++) {
@@ -216,7 +209,6 @@ export function importCustomDrills(csvText) {
         }
         userCustomDrills = newCustomData;
 
-        // Save Factory
         for (let key in factoryBuilder) {
             if (!currentDrills[key]) currentDrills[key] = {};
             for (let lvl in factoryBuilder[key]) {
@@ -229,11 +221,16 @@ export function importCustomDrills(csvText) {
         localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
         saveDrillsToStorage();
         showToast("Imported Successfully");
+        
+        // --- NEW: CLOSE MENU ON SUCCESS ---
+        const menu = document.getElementById('theme-menu');
+        if(menu) menu.classList.remove('open');
+        
         return true;
     } catch(e) { console.error(e); showToast("Import Failed"); return false; }
 }
 
-// --- EXPORT FUNCTION (Restored Name) ---
+// --- EXPORT FUNCTION (Closes Menu on Success) ---
 export function exportCustomDrills() {
     let csvContent = "Set;Ball;Name;Speed;Spin;Type;Height;Drop;BPM;Reps\n";
     
@@ -253,13 +250,11 @@ export function exportCustomDrills() {
          });
     };
 
-    // 1. Export Factory Drills (Basic, Combined, Complex)
     ['basic', 'combined', 'complex'].forEach(cat => {
         const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
         if (drillOrder[cat]) {
             drillOrder[cat].forEach(key => {
                 if (!currentDrills[key]) return;
-                // Export all 3 Levels
                 for(let lvl=1; lvl<=3; lvl++) {
                     if (currentDrills[key][lvl] && currentDrills[key][lvl].length > 0) {
                         const nameWithLevel = `${formatNameForKey(key)} (Lvl ${lvl})`;
@@ -270,7 +265,6 @@ export function exportCustomDrills() {
         }
     });
 
-    // 2. Export Custom Drills
     const cats = { 'custom-a': 'A', 'custom-b': 'B', 'custom-c': 'C' };
     for (let catKey in cats) {
         const setLabel = cats[catKey];
@@ -290,4 +284,8 @@ export function exportCustomDrills() {
     link.href = URL.createObjectURL(blob);
     link.download = "nova_drills_full.csv";
     link.click();
+    
+    // --- NEW: CLOSE MENU ON SUCCESS ---
+    const menu = document.getElementById('theme-menu');
+    if(menu) menu.classList.remove('open');
 }
