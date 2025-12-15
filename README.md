@@ -35,8 +35,7 @@ A pretty web client for the Nova S Pro table tennis robot. This tool replaces th
   * **Sharing:** Import/export via CSV or share online specific drills using codes.
   * **Randomization:** Randomize ball sequences or enable random options per ball.
   * **Randomization:** Randomize drop point of a single ball in a range (-drop point to +drop point)
-  * **Sorting:** Move drills up and down within a category using drag and drop
-  * **Moving:** Move defined drills between categories using drag and drop
+  * **Drag-and-Drop Management:** Easily reorder drill sequences or move drills between categories using drag-and-drop.
   * **Controls:** Set drill duration (time or repetitions), pause/stop, and countdown timers.<br>
 
 
