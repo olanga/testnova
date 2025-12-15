@@ -90,6 +90,8 @@ export function resetStats() {
     }
 }
 
+// --- Helper Functions ---
+
 function calculateRPMs(speed, spin, type) {
     const baseSpeed = 970 + (630.5 * speed);
     const spinFactor = 342 * spin;
@@ -108,19 +110,34 @@ function reverseCalculate(top, bot) {
     return { speed: Math.round(speedRaw * 2) / 2, spin: Math.round(spinRaw * 2) / 2, type: type };
 }
 
+function formatNameForKey(key) {
+    return key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+// --- IMPORT FUNCTION (Restored Name) ---
 export function importCustomDrills(csvText) {
     try {
         const lines = csvText.split(/\r?\n/);
+        
+        // 1. Prepare Data Containers
         const newCustomData = { "custom-a": [], "custom-b": [], "custom-c": [] };
-        const builder = {}; 
+        
+        // Clear existing custom drills to avoid orphans
         for (let cat in userCustomDrills) {
             userCustomDrills[cat].forEach(drill => { if (currentDrills[drill.key]) delete currentDrills[drill.key]; });
         }
-        const getCat = (val) => {
+
+        const customBuilder = {}; 
+        const factoryBuilder = {}; 
+
+        const getCatKey = (val) => {
             val = val.trim().toUpperCase();
             if(val === 'A') return 'custom-a';
             if(val === 'B') return 'custom-b';
             if(val === 'C') return 'custom-c';
+            if(val === 'BASIC') return 'basic';
+            if(val === 'COMBINED') return 'combined';
+            if(val === 'COMPLEX') return 'complex';
             return null;
         };
 
@@ -129,54 +146,86 @@ export function importCustomDrills(csvText) {
             const parts = line.split(line.includes(';') ? ';' : ',');
             if (parts.length < 10) return;
 
-            const catCode = parts[0].trim();
-            const ballNum = parseFloat(parts[1]); 
-            const name = parts[2].trim().substring(0, 40);
-            const category = getCat(catCode);
+            const setVal = parts[0].trim();
+            const category = getCatKey(setVal);
             if (!category) return;
 
+            const ballNum = parseFloat(parts[1]); 
+            let nameRaw = parts[2].trim();
+            
             const speed = parseFloat(parts[3]);
             let spin = parseFloat(parts[4]);
             const type = parts[5].trim().toLowerCase(); 
 
-            // Constraints
             const maxAllowed = SPIN_LIMITS[speed.toString()] ?? 10;
             if (spin > maxAllowed) spin = maxAllowed;
 
             const height = parseInt(parts[6]);
             const drop = parseFloat(parts[7]);
             
-            // --- UPDATED: BPM Import Logic ---
-            // CSV has BPM (30-90). Convert to internal freq % (0-100)
+            // BPM Import
             const bpm = parseInt(parts[8]);
             const freqPercent = (bpm - 30) / 0.6;
             
             const reps = parseInt(parts[9]);
 
             const motors = calculateRPMs(speed, spin, type);
-            // param index 4 uses converted freqPercent
             const params = [motors.top, motors.bot, height, drop, freqPercent, reps, 1, speed, spin, type];
-            const key = `cust_${catCode}_${name.replace(/\s+/g, '_')}`;
 
-            if (!builder[key]) {
-                let exists = newCustomData[category].find(d => d.key === key);
-                if (!exists && newCustomData[category].length < 20) newCustomData[category].push({ name: name, key: key });
-                builder[key] = { 1: {}, 2: {}, 3: {} }; 
-            }
-            for(let lvl=1; lvl<=3; lvl++) {
-                if (!builder[key][lvl][ballNum]) builder[key][lvl][ballNum] = [];
-                builder[key][lvl][ballNum].push(params);
+            if (category.startsWith('custom')) {
+                // CUSTOM DRILL
+                const name = nameRaw.substring(0, 40);
+                const key = `cust_${category.split('-')[1].toUpperCase()}_${name.replace(/\s+/g, '_')}`;
+
+                if (!customBuilder[key]) {
+                    let exists = newCustomData[category].find(d => d.key === key);
+                    if (!exists && newCustomData[category].length < 20) newCustomData[category].push({ name: name, key: key });
+                    customBuilder[key] = { 1: {}, 2: {}, 3: {} }; 
+                }
+                for(let lvl=1; lvl<=3; lvl++) {
+                    if (!customBuilder[key][lvl][ballNum]) customBuilder[key][lvl][ballNum] = [];
+                    customBuilder[key][lvl][ballNum].push(params);
+                }
+            } else {
+                // FACTORY DRILL
+                const lvlMatch = nameRaw.match(/\(Lvl (\d)\)$/i);
+                let level = 1;
+                let realName = nameRaw;
+                
+                if (lvlMatch) {
+                    level = parseInt(lvlMatch[1]);
+                    realName = nameRaw.replace(lvlMatch[0], '').trim();
+                }
+                const key = realName.toLowerCase().replace(/ /g, '-');
+                
+                if (!factoryBuilder[key]) factoryBuilder[key] = {};
+                if (!factoryBuilder[key][level]) factoryBuilder[key][level] = {};
+                
+                if (!factoryBuilder[key][level][ballNum]) factoryBuilder[key][level][ballNum] = [];
+                factoryBuilder[key][level][ballNum].push(params);
             }
         });
 
-        for (let key in builder) {
+        // Save Custom
+        for (let key in customBuilder) {
             currentDrills[key] = {};
             for(let lvl=1; lvl<=3; lvl++) {
-                const sortedBalls = Object.keys(builder[key][lvl]).sort((a,b) => parseFloat(a)-parseFloat(b));
-                currentDrills[key][lvl] = sortedBalls.map(bKey => builder[key][lvl][bKey]);
+                const sortedBalls = Object.keys(customBuilder[key][lvl]).sort((a,b) => parseFloat(a)-parseFloat(b));
+                currentDrills[key][lvl] = sortedBalls.map(bKey => customBuilder[key][lvl][bKey]);
             }
         }
         userCustomDrills = newCustomData;
+
+        // Save Factory
+        for (let key in factoryBuilder) {
+            if (!currentDrills[key]) currentDrills[key] = {};
+            for (let lvl in factoryBuilder[key]) {
+                const ballsObj = factoryBuilder[key][lvl];
+                const sortedBalls = Object.keys(ballsObj).sort((a,b) => parseFloat(a)-parseFloat(b));
+                currentDrills[key][lvl] = sortedBalls.map(bKey => ballsObj[bKey]);
+            }
+        }
+
         localStorage.setItem('custom_data', JSON.stringify(userCustomDrills));
         saveDrillsToStorage();
         showToast("Imported Successfully");
@@ -184,11 +233,45 @@ export function importCustomDrills(csvText) {
     } catch(e) { console.error(e); showToast("Import Failed"); return false; }
 }
 
+// --- EXPORT FUNCTION (Restored Name) ---
 export function exportCustomDrills() {
-    // UPDATED: Header changed Freq -> BPM
     let csvContent = "Set;Ball;Name;Speed;Spin;Type;Height;Drop;BPM;Reps\n";
-    const cats = { 'custom-a': 'A', 'custom-b': 'B', 'custom-c': 'C' };
     
+    const appendDrillToCSV = (setLabel, name, sequence) => {
+         sequence.forEach((stepOptions, stepIndex) => {
+             const ballNum = stepIndex + 1;
+             stepOptions.forEach(ball => {
+                 let speed = ball[7], spin = ball[8], type = ball[9];
+                 if (speed === undefined) {
+                     const rev = reverseCalculate(ball[0], ball[1]);
+                     speed = rev.speed; spin = rev.spin; type = rev.type;
+                 }
+                 const bpm = Math.round(30 + (ball[4] * 0.6));
+                 const row = [setLabel, ballNum, name, speed, spin, type, ball[2], ball[3], bpm, ball[5]].join(";");
+                 csvContent += row + "\n";
+             });
+         });
+    };
+
+    // 1. Export Factory Drills (Basic, Combined, Complex)
+    ['basic', 'combined', 'complex'].forEach(cat => {
+        const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
+        if (drillOrder[cat]) {
+            drillOrder[cat].forEach(key => {
+                if (!currentDrills[key]) return;
+                // Export all 3 Levels
+                for(let lvl=1; lvl<=3; lvl++) {
+                    if (currentDrills[key][lvl] && currentDrills[key][lvl].length > 0) {
+                        const nameWithLevel = `${formatNameForKey(key)} (Lvl ${lvl})`;
+                        appendDrillToCSV(catLabel, nameWithLevel, currentDrills[key][lvl]);
+                    }
+                }
+            });
+        }
+    });
+
+    // 2. Export Custom Drills
+    const cats = { 'custom-a': 'A', 'custom-b': 'B', 'custom-c': 'C' };
     for (let catKey in cats) {
         const setLabel = cats[catKey];
         const drillList = userCustomDrills[catKey];
@@ -196,30 +279,15 @@ export function exportCustomDrills() {
             drillList.forEach(drill => {
                 const sequence = currentDrills[drill.key] ? currentDrills[drill.key][1] : null; 
                 if (sequence) {
-                    sequence.forEach((stepOptions, stepIndex) => {
-                         const ballNum = stepIndex + 1;
-                         stepOptions.forEach(ball => {
-                             let speed = ball[7], spin = ball[8], type = ball[9];
-                             if (speed === undefined) {
-                                 const rev = reverseCalculate(ball[0], ball[1]);
-                                 speed = rev.speed; spin = rev.spin; type = rev.type;
-                             }
-                             
-                             // --- UPDATED: Export Logic ---
-                             // Convert internal % (ball[4]) to BPM for CSV
-                             const bpm = Math.round(30 + (ball[4] * 0.6));
-                             
-                             const row = [setLabel, ballNum, drill.name, speed, spin, type, ball[2], ball[3], bpm, ball[5]].join(";");
-                             csvContent += row + "\n";
-                         });
-                    });
+                    appendDrillToCSV(setLabel, drill.name, sequence);
                 }
             });
         }
     }
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "nova_drills_v2.csv";
+    link.download = "nova_drills_full.csv";
     link.click();
 }
