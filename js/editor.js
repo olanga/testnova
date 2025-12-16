@@ -1,7 +1,7 @@
 import { currentDrills, userCustomDrills, selectedLevel, saveDrillsToStorage } from './state.js';
 import { SPIN_LIMITS, RPM_MIN, RPM_MAX } from './constants.js';
 import { sendPacket, packBall, bleState } from './bluetooth.js';
-import { showToast, clamp } from './utils.js';
+import { showToast, clamp, toggleBodyScroll } from './utils.js';
 import { uploadDrill } from './cloud.js';
 
 // --- Local State ---
@@ -34,12 +34,14 @@ export function openEditor(key) {
     }
 
     document.getElementById('editor-modal').classList.add('open');
+    toggleBodyScroll(true);
 }
 
 export function closeEditor() {
     document.getElementById('editor-modal').classList.remove('open');
     editingDrillKey = null;
     tempDrillData = null;
+    toggleBodyScroll(false);
 }
 
 export function saveDrillChanges() {
@@ -144,7 +146,7 @@ function renderEditor() {
             <div style="display:flex; align-items:center; gap:5px; margin-left:auto; margin-right:10px;">
                 <div class="editor-field" style="flex-direction:row; align-items:center; gap:6px; padding:2px 6px; background:var(--bg); border:1px solid var(--border);">
                     <label style="font-size:0.6rem; color:var(--text-light); font-weight:800; text-transform:uppercase;">Scatter</label>
-                    <input type="number" 
+                    <input type="number" inputmode="decimal" 
                            value="${currentScatter}" 
                            step="0.5" min="0" max="${maxScatter}"
                            style="width:40px; text-align:center; font-weight:bold; color:var(--primary); font-size:0.9rem;"
@@ -203,36 +205,37 @@ function renderEditor() {
                     </div>
                 </div>`;
 
+            // NOTE: 'Drop' uses onchange to prevent re-rendering while typing negative numbers
             const inputsHtml = `
                 <div class="editor-grid">
                     <div class="editor-field">
                         <div class="field-header"><label>Speed</label><span class="range-hint">0-10</span></div>
-                        <input type="number" id="inp-speed-${stepIndex}-${optIndex}" value="${speed}" step="0.5" min="0" max="10"
+                        <input type="number" inputmode="decimal" id="inp-speed-${stepIndex}-${optIndex}" value="${speed}" step="0.5" min="0" max="10"
                             oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, 7, this.value)">
                     </div>
                     <div class="editor-field">
                         <div class="field-header"><label>Spin</label><span class="range-hint" id="lbl-spin-${stepIndex}-${optIndex}">Max ${currentMaxSpin}</span></div>
-                        <input type="number" id="inp-spin-${stepIndex}-${optIndex}" value="${spin}" step="0.5" min="0" max="${currentMaxSpin}"
+                        <input type="number" inputmode="decimal" id="inp-spin-${stepIndex}-${optIndex}" value="${spin}" step="0.5" min="0" max="${currentMaxSpin}"
                             oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, 8, this.value)">
                     </div>
                     <div class="editor-field">
                         <div class="field-header"><label>Height</label><span class="range-hint">-50/100</span></div>
-                        <input type="number" value="${ballParams[2]}" step="1" min="-50" max="100"
+                        <input type="number" inputmode="decimal" value="${ballParams[2]}" step="1" min="-50" max="100"
                             oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, 2, this.value)">
                     </div>
                     <div class="editor-field">
                         <div class="field-header"><label>Drop</label><span class="range-hint">L/R</span></div>
-                        <input type="number" value="${ballParams[3]}" step="0.5" min="-10" max="10"
-                            oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, 3, this.value)">
+                        <input type="number" inputmode="decimal" value="${ballParams[3]}" step="0.5" min="-10" max="10"
+                            onchange="window.handleEditorInput(${stepIndex}, ${optIndex}, 3, this.value)">
                     </div>
                     <div class="editor-field">
                         <div class="field-header"><label>BPM</label><span class="range-hint">30-90</span></div>
-                        <input type="number" value="${bpmValue}" step="1" min="30" max="90"
+                        <input type="number" inputmode="decimal" value="${bpmValue}" step="1" min="30" max="90"
                             oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, 4, this.value)">
                     </div>
                     <div class="editor-field">
                         <div class="field-header"><label>Reps</label><span class="range-hint">#</span></div>
-                        <input type="number" value="${ballParams[5]}" step="1" min="1" max="100"
+                        <input type="number" inputmode="decimal" value="${ballParams[5]}" step="1" min="1" max="100"
                             oninput="window.handleEditorInput(${stepIndex}, ${optIndex}, 5, this.value)">
                     </div>
                 </div>`;
