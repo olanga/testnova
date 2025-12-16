@@ -112,13 +112,11 @@ function renderEditor() {
     const modalBody = document.getElementById('editor-body');
     modalBody.innerHTML = '';
     
-    // --- [MODIFIED] Hide "Shuffle balls" toggle if drill has only 1 step ---
+    // Hide "Shuffle balls" toggle if drill has only 1 step
     const shuffleContainer = document.querySelector('.random-toggle-container');
     if (shuffleContainer) {
-        // If there's 0 or 1 step, shuffling is pointless. Show only for > 1.
         shuffleContainer.style.display = (tempDrillData && tempDrillData.length > 1) ? 'flex' : 'none';
     }
-    // -----------------------------------------------------------------------
 
     const isConnected = bleState.isConnected;
 
@@ -137,8 +135,7 @@ function renderEditor() {
         
         const isSingle = stepOptions.length === 1;
         
-        // --- NEW SCATTER LOGIC ---
-        // Calculate dynamic max scatter based on current drop
+        // --- SCATTER LOGIC ---
         const currentDrop = stepOptions[0][3];
         const currentScatter = stepOptions[0][10] || 0; 
         const maxScatter = 10 - Math.abs(currentDrop); 
@@ -155,7 +152,7 @@ function renderEditor() {
                 </div>
             </div>` : '';
 
-        // Duplicate/Next Step Button
+        // Duplicate/Next Step Button (Header)
         const plusBtn = `
             <button class="btn-add-opt" title="Duplicate Ball" onclick="window.handleAddSequenceStep(${stepIndex})">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -261,11 +258,26 @@ function renderEditor() {
         });
         modalBody.appendChild(groupDiv);
     });
+
+    // --- NEW: Add Button at Bottom of Sequence ---
+    const addZone = document.createElement('div');
+    addZone.className = 'swap-zone';
+    addZone.style.margin = "-10px 0 20px 0"; 
+    addZone.innerHTML = `
+        <button class="btn-swap" 
+                style="color:var(--primary); border-color:var(--primary); width:32px; height:32px;" 
+                onclick="window.handleAddSequenceStep(${tempDrillData.length - 1})" 
+                title="Add New Ball">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+        </button>`;
+    modalBody.appendChild(addZone);
 }
 
 // --- HANDLERS ---
 
-// New Handler for Scatter Input
 window.handleScatterChange = (stepIdx, value) => {
     if (!tempDrillData) return;
     const ball = tempDrillData[stepIdx][0]; // Scatter applies to the first ball (group level)
@@ -273,7 +285,6 @@ window.handleScatterChange = (stepIdx, value) => {
     let val = parseFloat(value);
     if(isNaN(val)) val = 0;
     
-    // Ensure Sum of |Drop| + Scatter <= 10
     const currentDrop = Math.abs(ball[3]);
     if (val + currentDrop > 10) {
         val = 10 - currentDrop;
@@ -290,23 +301,20 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     let val = parseFloat(value);
     if(isNaN(val)) val = 0;
 
-    // Convert BPM input (30-90) back to internal percent (0-100)
     if (paramIdx === 4) {
         let percent = (val - 30) / 0.6;
         ball[paramIdx] = clamp(percent, 0, 100);
     } 
-    // Handle Drop (Index 3) specifically to check Scatter constraints
     else if (paramIdx === 3) {
         val = clamp(val, -10, 10);
         ball[paramIdx] = val;
         
-        // Check if existing Scatter violates the new Drop position
         const currentScatter = ball[10] || 0;
         if (Math.abs(val) + currentScatter > 10) {
-            ball[10] = 10 - Math.abs(val); // Clamp scatter down
+            ball[10] = 10 - Math.abs(val);
         }
-        renderEditor(); // Re-render to update the max attribute on scatter input
-        return; // Render handles the rest
+        renderEditor(); 
+        return; 
     } 
     else {
         ball[paramIdx] = val;
