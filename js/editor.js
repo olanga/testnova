@@ -68,6 +68,13 @@ export function saveDrillChanges() {
             
             if(ball[6] === undefined) ball[6] = 1;
             ball[6] = ball[6] === 1 ? 1 : 0; 
+            
+            // Validate Scatter (Index 10) on save
+            const currentDrop = Math.abs(ball[3]);
+            const scatter = ball[10] || 0;
+            if (currentDrop + scatter > 10) {
+                ball[10] = clamp(10 - currentDrop, 0, 10);
+            }
         });
     });
 
@@ -120,9 +127,26 @@ function renderEditor() {
         groupDiv.className = `ball-group ${isActive ? '' : 'inactive'}`;
         
         const isSingle = stepOptions.length === 1;
-        const isRnd = isSingle && !!stepOptions[0][10];
+        
+        // --- NEW SCATTER LOGIC ---
+        // Calculate dynamic max scatter based on current drop
+        const currentDrop = stepOptions[0][3];
+        const currentScatter = stepOptions[0][10] || 0; 
+        const maxScatter = 10 - Math.abs(currentDrop); 
 
-        // Duplicate/Next Step Button (Icon: Two overlapping squares)
+        const scatterHtml = isSingle ? `
+            <div style="display:flex; align-items:center; gap:5px; margin-left:auto; margin-right:10px;">
+                <div class="editor-field" style="flex-direction:row; align-items:center; gap:6px; padding:2px 6px; background:var(--bg); border:1px solid var(--border);">
+                    <label style="font-size:0.6rem; color:var(--text-light); font-weight:800; text-transform:uppercase;">Scatter</label>
+                    <input type="number" 
+                           value="${currentScatter}" 
+                           step="0.5" min="0" max="${maxScatter}"
+                           style="width:40px; text-align:center; font-weight:bold; color:var(--primary); font-size:0.9rem;"
+                           onchange="window.handleScatterChange(${stepIndex}, this.value)">
+                </div>
+            </div>` : '';
+
+        // Duplicate/Next Step Button
         const plusBtn = `
             <button class="btn-add-opt" title="Duplicate Ball" onclick="window.handleAddSequenceStep(${stepIndex})">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -131,22 +155,14 @@ function renderEditor() {
                 </svg>
             </button>`;
 
-        const rndHtml = isSingle ? `
-            <div style="display:flex; align-items:center; gap:8px; margin-left:45px;">
-                <span style="font-size:0.75rem; font-weight:800; color:var(--text-light); opacity:1.0;">Random drop</span>
-                <div class="ball-toggle ${isRnd ? 'active' : ''}" onclick="window.handleRndToggle(${stepIndex})">
-                    <div class="toggle-switch"></div>
-                </div>
-            </div>` : '';
-
         groupDiv.innerHTML = `
             <div class="group-title">
-                <div style="display:flex; align-items:center; gap:10px;">
+                <div style="display:flex; align-items:center; gap:10px; flex:1;">
                     <span>Ball ${stepIndex + 1}</span>
                     <div class="ball-toggle ${isActive ? 'active' : ''}" onclick="window.handleToggleBallActive(${stepIndex})">
                         <div class="toggle-switch"></div>
                     </div>
-                    ${rndHtml}
+                    ${scatterHtml}
                 </div>
                 ${plusBtn}
             </div>`;
@@ -240,6 +256,25 @@ function renderEditor() {
 
 // --- HANDLERS ---
 
+// New Handler for Scatter Input
+window.handleScatterChange = (stepIdx, value) => {
+    if (!tempDrillData) return;
+    const ball = tempDrillData[stepIdx][0]; // Scatter applies to the first ball (group level)
+    
+    let val = parseFloat(value);
+    if(isNaN(val)) val = 0;
+    
+    // Ensure Sum of |Drop| + Scatter <= 10
+    const currentDrop = Math.abs(ball[3]);
+    if (val + currentDrop > 10) {
+        val = 10 - currentDrop;
+        showToast(`Limit is ${val} for this Drop position`);
+    }
+    
+    ball[10] = clamp(val, 0, 10);
+    renderEditor();
+};
+
 window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     if (!tempDrillData) return;
     const ball = tempDrillData[stepIdx][optIdx];
@@ -250,7 +285,21 @@ window.handleEditorInput = (stepIdx, optIdx, paramIdx, value) => {
     if (paramIdx === 4) {
         let percent = (val - 30) / 0.6;
         ball[paramIdx] = clamp(percent, 0, 100);
-    } else {
+    } 
+    // Handle Drop (Index 3) specifically to check Scatter constraints
+    else if (paramIdx === 3) {
+        val = clamp(val, -10, 10);
+        ball[paramIdx] = val;
+        
+        // Check if existing Scatter violates the new Drop position
+        const currentScatter = ball[10] || 0;
+        if (Math.abs(val) + currentScatter > 10) {
+            ball[10] = 10 - Math.abs(val); // Clamp scatter down
+        }
+        renderEditor(); // Re-render to update the max attribute on scatter input
+        return; // Render handles the rest
+    } 
+    else {
         ball[paramIdx] = val;
     }
 
@@ -290,13 +339,6 @@ window.handleToggleBallActive = (stepIdx) => {
     if (!tempDrillData) return;
     const currentVal = tempDrillData[stepIdx][0][6] === undefined ? 1 : tempDrillData[stepIdx][0][6];
     tempDrillData[stepIdx].forEach(opt => opt[6] = currentVal === 1 ? 0 : 1);
-    renderEditor();
-};
-
-window.handleRndToggle = (stepIdx) => {
-    if (!tempDrillData) return;
-    const ball = tempDrillData[stepIdx][0];
-    ball[10] = !ball[10];
     renderEditor();
 };
 
@@ -472,7 +514,6 @@ function updateTitleDisplay(key) {
     }
 }
 
-// --- REVERTED: Byte 3 set back to 1 ---
 window.handleTestBall = async (stepIdx, optIdx) => {
     if (!bleState.isConnected) { showToast("Device not connected"); return; }
     const d = tempDrillData[stepIdx][optIdx];
@@ -480,7 +521,7 @@ window.handleTestBall = async (stepIdx, optIdx) => {
     const buffer = new ArrayBuffer(31); 
     const view = new DataView(buffer);
     view.setUint8(0, 0x81); view.setUint16(1, 28, true); 
-    view.setUint8(3, 1); // Set to 1
+    view.setUint8(3, 1);
     view.setUint16(4, 1, true); 
     view.setUint8(6, 0);
     new Uint8Array(buffer).set(ballData, 7);
@@ -488,7 +529,6 @@ window.handleTestBall = async (stepIdx, optIdx) => {
     catch (e) { console.error(e); showToast("Test Failed"); }
 };
 
-// --- REVERTED: Byte 3 set back to 1 ---
 window.handleTestCombo = async () => {
     if (!bleState.isConnected) { showToast("Device not connected"); return; }
     if (!tempDrillData || tempDrillData.length === 0) return;
@@ -497,15 +537,21 @@ window.handleTestCombo = async () => {
         if (stepOptions[0][6] === 0) return;
         const chosen = stepOptions[0]; 
         const d = [...chosen];
-        if (d[10] === true) {
+        
+        // --- SCATTER LOGIC FOR TEST COMBO ---
+        const scatter = d[10] || 0;
+        if (scatter > 0) {
             const currentDrop = d[3];
-            const limit = Math.abs(currentDrop);
-            if(limit > 0) {
-                 const totalSteps = (limit * 2) / 0.5;
-                 const randomStep = Math.floor(Math.random() * (totalSteps + 1));
-                 d[3] = -limit + (randomStep * 0.5);
+            const minDrop = currentDrop - scatter;
+            const maxDrop = currentDrop + scatter;
+            const span = maxDrop - minDrop;
+            const steps = Math.floor(span / 0.5);
+            if (steps > 0) {
+                 const randomStep = Math.floor(Math.random() * (steps + 1));
+                 d[3] = clamp(minDrop + (randomStep * 0.5), -10, 10);
             }
         }
+        
         balls.push(packBall(d[0], d[1], d[2], d[3], d[4], 1));
     });
     if (balls.length === 0) { showToast("No active balls"); return; }
@@ -514,7 +560,7 @@ window.handleTestCombo = async () => {
     const view = new DataView(buffer);
     const uint8 = new Uint8Array(buffer);
     view.setUint8(0, 0x81); view.setUint16(1, 4 + (balls.length * 24), true); 
-    view.setUint8(3, 1); // Set to 1
+    view.setUint8(3, 1);
     view.setUint16(4, 1, true); 
     view.setUint8(6, 0);
     let offset = 7;

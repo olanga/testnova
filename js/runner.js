@@ -154,28 +154,34 @@ async function runIteration() {
         // Clone to avoid mutating the original drill data in state
         const tempBall = [...chosenOption];
 
-        // --- RND MODE LOGIC ---
-        // Index 10 is the RND flag. Index 3 is Drop (-10 to 10).
-        if (tempBall[10] === true) {
+        // --- NEW SCATTER LOGIC ---
+        // Index 10 is the Scatter flag/value (0-10). Index 3 is Drop (-10 to 10).
+        const scatter = tempBall[10] || 0;
+        
+        if (scatter > 0) {
             const currentDrop = tempBall[3];
-            const limit = Math.abs(currentDrop);
             
-            // If limit is 0 (Center), random range is 0 to 0, so do nothing.
-            if (limit > 0) {
-                // Determine how many 0.5 steps exist in the full range (-limit to +limit)
-                // Range Span = limit * 2. 
-                // Steps = Span / 0.5
-                const totalSteps = (limit * 2) / 0.5;
+            // Calculate Range [Drop - Scatter] to [Drop + Scatter]
+            const minDrop = currentDrop - scatter;
+            const maxDrop = currentDrop + scatter;
+            
+            // We assume 0.5 steps for the robot's drop resolution
+            const span = maxDrop - minDrop;
+            const steps = Math.floor(span / 0.5);
+            
+            if (steps > 0) {
+                // Pick a random step 
+                const randomStep = Math.floor(Math.random() * (steps + 1));
                 
-                // Pick a random step index
-                const randomStep = Math.floor(Math.random() * (totalSteps + 1));
+                // Calculate new drop
+                let newDrop = minDrop + (randomStep * 0.5);
                 
-                // Calculate new drop value
-                const newDrop = -limit + (randomStep * 0.5);
+                // Safety Clamp to ensure we never exceed table limits (-10 to 10)
+                newDrop = clamp(newDrop, -10, 10);
                 
                 tempBall[3] = newDrop;
-                // Optional debug log
-                // log(`RND Active: Range ±${limit}, New Drop: ${newDrop}`);
+                
+                log(`Scatter Active: Base ${currentDrop} ±${scatter} -> ${newDrop}`);
             }
         }
 
