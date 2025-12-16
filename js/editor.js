@@ -111,6 +111,15 @@ function reverseCalculate(top, bot) {
 function renderEditor() {
     const modalBody = document.getElementById('editor-body');
     modalBody.innerHTML = '';
+    
+    // --- [MODIFIED] Hide "Shuffle balls" toggle if drill has only 1 step ---
+    const shuffleContainer = document.querySelector('.random-toggle-container');
+    if (shuffleContainer) {
+        // If there's 0 or 1 step, shuffling is pointless. Show only for > 1.
+        shuffleContainer.style.display = (tempDrillData && tempDrillData.length > 1) ? 'flex' : 'none';
+    }
+    // -----------------------------------------------------------------------
+
     const isConnected = bleState.isConnected;
 
     tempDrillData.forEach((stepOptions, stepIndex) => {
