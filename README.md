@@ -5,6 +5,10 @@
 
 A pretty web client for the Nova S Pro table tennis robot. This tool replaces the original app, removing the requirement for server connectivity.
 
+| Android | --- | Web |
+| :---: | :---: | :---: |
+| <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" width="100"> | <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" width="100"> | <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" width="100"> |
+
 ## Usage
 
 **Online:**
