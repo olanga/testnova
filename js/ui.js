@@ -1,12 +1,21 @@
-import { currentDrills, userCustomDrills, appStats, drillOrder, saveDrillOrder, saveDrillsToStorage } from './state.js';
+import { 
+    currentDrills, 
+    userCustomDrills, 
+    appStats, 
+    drillOrder, 
+    saveDrillOrder, 
+    saveDrillsToStorage, 
+    selectedLevel,
+    lastPlayedDrill // NEW IMPORT
+} from './state.js';
 import { bleState } from './bluetooth.js';
 import { showToast } from './utils.js';
 import { openEditor } from './editor.js';
 
 // --- NEW: Handle Create New Drill ---
 window.handleCreateNewDrill = (category) => {
-    if (userCustomDrills[category].length >= 100) {
-        showToast("Category is full (Max 100)");
+    if (userCustomDrills[category].length >= 20) {
+        showToast("Category is full (Max 20)");
         return;
     }
 
@@ -69,7 +78,7 @@ window.handleTabDrop = (e, targetCat) => {
 
     if (!sourceCat) return; 
     if (sourceCat === targetCat) return; 
-    if (userCustomDrills[targetCat].length >= 100) {
+    if (userCustomDrills[targetCat].length >= 20) {
         showToast(`Bank ${targetCat.split('-')[1].toUpperCase()} is full!`);
         return;
     }
@@ -148,7 +157,23 @@ export function renderDrillButtons() {
         addWrapper.appendChild(addBtn);
         container.appendChild(addWrapper);
     });
+
+    // --- NEW: Update Highlight ---
+    updateLastPlayedHighlight();
 }
+
+// --- NEW: Highlight Function ---
+export function updateLastPlayedHighlight() {
+    // 1. Remove class from all buttons
+    document.querySelectorAll('.btn-drill').forEach(b => b.classList.remove('last-played'));
+    
+    // 2. Add class to the stored drill key (if it exists)
+    if (lastPlayedDrill) {
+        const btn = document.querySelector(`.btn-drill[data-key="${lastPlayedDrill}"]`);
+        if (btn) btn.classList.add('last-played');
+    }
+}
+// ------------------------------
 
 function createButton(container, key, label, allowSort, category) {
     const btn = document.createElement('button');
