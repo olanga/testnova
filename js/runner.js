@@ -1,6 +1,6 @@
 import { currentDrills, selectedLevel, runMode, appStats } from './state.js';
 import { sendPacket, packBall, bleState } from './bluetooth.js';
-import { log, showToast, clamp } from './utils.js';
+import { log, showToast, clamp, toggleBodyScroll } from './utils.js'; // Added toggleBodyScroll
 import { updateStatsUI } from './ui.js';
 
 let isRunning = false;
@@ -48,6 +48,8 @@ export function startDrillSequence(drillName) {
     activeDrillParams = executableSteps;
     activeDrillRandom = !!currentDrills[drillName].random;
     
+    // --- LOCK SCROLL ON START ---
+    toggleBodyScroll(true);
     ui.overlay.classList.add('open');
     
     let count = 4;
@@ -172,7 +174,6 @@ async function runIteration() {
 
     // --- FIX: Only increment BALLS here ---
     appStats.balls += balls.length;
-    // appStats.drills += 1;  <-- REMOVED THIS LINE
     localStorage.setItem('nova_stats', JSON.stringify(appStats));
     updateStatsUI();
     // --------------------------------------
@@ -233,6 +234,8 @@ export function stopRun() {
     clearInterval(runTimer);
     clearTimeout(pauseTimer);
     
+    // --- UNLOCK SCROLL ON STOP ---
+    toggleBodyScroll(false);
     ui.overlay.classList.remove('open');
     document.querySelectorAll('.btn-drill').forEach(b => b.classList.remove('running'));
     
