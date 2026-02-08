@@ -5,6 +5,7 @@ import { updateStatsUI, updateLastPlayedHighlight } from './ui.js';
 
 let isRunning = false;
 let isPaused = false;
+let isTestMode = false; // --- ADDED: Track Test Mode state
 let currentCount = 0;
 let targetCount = 0;
 let remainingTime = 0;
@@ -13,7 +14,7 @@ let remainingTime = 0;
 let pauseTimer = null;
 let countdownTimer = null;
 let runTimer = null;
-let startTimeout = null; // --- ADDED: Track the start delay
+let startTimeout = null; 
 
 let activeDrillParams = null;
 let activeDrillRandom = false;
@@ -21,12 +22,14 @@ let activeDrillRandom = false;
 // UI Elements (Cached for performance)
 const ui = {
     overlay: document.getElementById('run-overlay'),
+    testOverlay: document.getElementById('test-overlay'), // --- ADDED
     display: document.getElementById('run-display'),
     label: document.getElementById('run-label'),
     progress: document.getElementById('run-progress'),
     btnPause: document.getElementById('btn-pause')
 };
 
+// --- STANDARD DRILL START ---
 export function startDrillSequence(drillName) {
     const rawParams = currentDrills[drillName] ? currentDrills[drillName][selectedLevel] : null;
     if(!rawParams) {
@@ -34,7 +37,7 @@ export function startDrillSequence(drillName) {
          return;
     }
 
-    // --- FILTER INACTIVE STEPS ---
+    // Filter Inactive Steps
     const executableSteps = rawParams.filter(step => {
         const isActive = step[0][6]; 
         return isActive === undefined || isActive === 1;
@@ -48,15 +51,15 @@ export function startDrillSequence(drillName) {
     
     activeDrillParams = executableSteps;
     activeDrillRandom = !!currentDrills[drillName].random;
+    isTestMode = false; // Ensure regular mode
     
-    // --- NEW: SAVE LAST PLAYED STATE ---
+    // Save state & Lock UI
     setLastPlayed(drillName);
     updateLastPlayedHighlight();
-
-    // --- LOCK SCROLL ON START ---
     toggleBodyScroll(true);
     ui.overlay.classList.add('open');
     
+    // Countdown Logic
     let count = 4;
     ui.display.textContent = count;
     ui.label.textContent = "GET READY";
@@ -78,21 +81,47 @@ export function startDrillSequence(drillName) {
         } else {
             clearInterval(countdownTimer);
             ui.display.textContent = "GO!";
-            // --- UPDATED: Store timeout to allow cancelling ---
             startTimeout = setTimeout(beginDrillExecution, 800);
         }
     }, 1000);
+}
+
+// --- NEW: TEST DRILL START ---
+export function startTestRun(drillSteps, isRandom) {
+    // Filter Inactive Steps (Safety check)
+    const executableSteps = drillSteps.filter(step => {
+        const isActive = step[0][6]; 
+        return isActive === undefined || isActive === 1;
+    });
+
+    if (executableSteps.length === 0) {
+        showToast("No active balls to test");
+        return;
+    }
+
+    activeDrillParams = executableSteps;
+    activeDrillRandom = !!isRandom;
+    isTestMode = true;
+    isRunning = true;
+    isPaused = false;
+
+    toggleBodyScroll(true);
+    if(ui.testOverlay) ui.testOverlay.classList.add('open');
+
+    // Start immediately without countdown/stats
+    runIteration();
 }
 
 export function beginDrillExecution() {
     isRunning = true;
     isPaused = false;
     
-    // --- FIX: Increment Drill Count ONCE per session, not per rep ---
-    appStats.drills += 1;
-    localStorage.setItem('nova_stats', JSON.stringify(appStats));
-    updateStatsUI();
-    // ---------------------------------------------------------------
+    // Increment Drill Count (Only in normal mode)
+    if (!isTestMode) {
+        appStats.drills += 1;
+        localStorage.setItem('nova_stats', JSON.stringify(appStats));
+        updateStatsUI();
+    }
 
     ui.btnPause.style.display = 'block';
     ui.btnPause.textContent = "PAUSE";
@@ -134,13 +163,16 @@ export function beginDrillExecution() {
 async function runIteration() {
     if(!isRunning || isPaused) return;
 
-    if (runMode === 'reps') {
-        const remaining = targetCount - currentCount;
-        ui.display.textContent = remaining;
-        
-        const fractionCompleted = currentCount / targetCount;
-        ui.progress.style.strokeDashoffset = 565 * fractionCompleted;
-        currentCount++;
+    // Normal Mode UI Updates
+    if (!isTestMode) {
+        if (runMode === 'reps') {
+            const remaining = targetCount - currentCount;
+            ui.display.textContent = remaining;
+            
+            const fractionCompleted = currentCount / targetCount;
+            ui.progress.style.strokeDashoffset = 565 * fractionCompleted;
+            currentCount++;
+        }
     }
 
     let sequence = activeDrillParams; 
@@ -174,15 +206,15 @@ async function runIteration() {
             }
         }
 
-        log(`TX Ball ${i+1}: ${tempBall.join(' ')}`);
         balls.push(packBall(...tempBall));
     });
 
-    // --- FIX: Only increment BALLS here ---
-    appStats.balls += balls.length;
-    localStorage.setItem('nova_stats', JSON.stringify(appStats));
-    updateStatsUI();
-    // --------------------------------------
+    // Only increment stats in Normal Mode
+    if (!isTestMode) {
+        appStats.balls += balls.length;
+        localStorage.setItem('nova_stats', JSON.stringify(appStats));
+        updateStatsUI();
+    }
 
     const packet = buildPacket(balls);
     await sendPacket(packet);
@@ -192,7 +224,8 @@ async function runIteration() {
 export function handleDone() {
     if(!isRunning) return;
     
-    if (runMode === 'reps' && currentCount >= targetCount) {
+    // Normal Mode Stop Condition
+    if (!isTestMode && runMode === 'reps' && currentCount >= targetCount) {
         stopRun();
         return;
     }
@@ -200,6 +233,7 @@ export function handleDone() {
     const pauseInput = parseFloat(document.getElementById('input-pause').value);
     const pauseMs = (isNaN(pauseInput) ? 1.0 : pauseInput) * 1000;
 
+    // Pause logic applies to both Normal (Rep/Time) and Test (Infinite) modes
     if (!isPaused) {
          pauseTimer = setTimeout(() => { 
              if(isRunning && !isPaused) runIteration(); 
@@ -213,7 +247,7 @@ export function togglePause() {
         ui.btnPause.textContent = "PAUSE";
         ui.btnPause.classList.remove('pulse-anim');
         
-        if(runMode === 'time') {
+        if(runMode === 'time' && !isTestMode) {
              ui.progress.style.transition = `stroke-dashoffset ${remainingTime}s linear`;
              ui.progress.style.strokeDashoffset = '565';
         }
@@ -224,10 +258,12 @@ export function togglePause() {
         ui.btnPause.classList.add('pulse-anim');
         clearTimeout(pauseTimer);
         
-        const computedStyle = window.getComputedStyle(ui.progress);
-        const currentOffset = computedStyle.getPropertyValue('stroke-dashoffset');
-        ui.progress.style.transition = 'none';
-        ui.progress.style.strokeDashoffset = currentOffset;
+        if(!isTestMode) {
+            const computedStyle = window.getComputedStyle(ui.progress);
+            const currentOffset = computedStyle.getPropertyValue('stroke-dashoffset');
+            ui.progress.style.transition = 'none';
+            ui.progress.style.strokeDashoffset = currentOffset;
+        }
         
         sendPacket([0x80,1,0,1]); 
     }
@@ -236,34 +272,33 @@ export function togglePause() {
 export function stopRun() {
     isRunning = false;
     isPaused = false;
+    isTestMode = false; // Reset mode
+    
     clearInterval(countdownTimer);
     clearInterval(runTimer);
     clearTimeout(pauseTimer);
-    clearTimeout(startTimeout); // --- ADDED: Clear start delay on stop
+    clearTimeout(startTimeout);
     
-    // --- UNLOCK SCROLL ON STOP ---
     toggleBodyScroll(false);
+    
+    // Close BOTH overlays
     ui.overlay.classList.remove('open');
+    if(ui.testOverlay) ui.testOverlay.classList.remove('open');
+    
     document.querySelectorAll('.btn-drill').forEach(b => b.classList.remove('running'));
     
     sendPacket([0x80,1,0,1]); // Stop command
     log("Drill Stopped");
 }
 
-// --- NEW FUNCTION: Skip Countdown ---
 export function skipCountdown() {
-    // Only execute if NOT running and overlay IS open (i.e., we are in countdown state)
     if (isRunning) return;
     if (!ui.overlay.classList.contains('open')) return;
     
-    // Cancel any pending start mechanisms
     clearInterval(countdownTimer);
     clearTimeout(startTimeout);
     
-    // Visual feedback
     ui.display.textContent = "GO!";
-    
-    // Start immediately
     beginDrillExecution();
 }
 

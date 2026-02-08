@@ -3,6 +3,7 @@ import { SPIN_LIMITS, RPM_MIN, RPM_MAX } from './constants.js';
 import { sendPacket, packBall, bleState } from './bluetooth.js';
 import { showToast, clamp, toggleBodyScroll } from './utils.js';
 import { uploadDrill } from './cloud.js';
+import { startTestRun } from './runner.js'; // --- ADDED IMPORT
 
 // --- Local State ---
 let tempDrillData = null;
@@ -114,7 +115,7 @@ function renderEditor() {
     const modalBody = document.getElementById('editor-body');
     modalBody.innerHTML = '';
     
-    // Hide "Shuffle balls" toggle if drill has only 1 step
+    // Hide "Random" toggle if drill has only 1 step
     const shuffleContainer = document.querySelector('.random-toggle-container');
     if (shuffleContainer) {
         shuffleContainer.style.display = (tempDrillData && tempDrillData.length > 1) ? 'flex' : 'none';
@@ -188,17 +189,12 @@ function renderEditor() {
             const type = ballParams[9];
             const currentMaxSpin = SPIN_LIMITS[speed.toString()] ?? 10;
             
-            // --- UPDATED: Backspin Visual Logic (Red Input Field) ---
             const spinStyle = type === 'back' ? 'background:var(--danger); color:#fff; border-radius:4px;' : '';
-            // -------------------------------------
-            
-            // BPM Calculation: 30 + (Percent * 0.6)
             const bpmValue = Math.round(30 + (ballParams[4] * 0.6));
 
             const optDiv = document.createElement('div');
             optDiv.className = 'option-card';
 
-            // --- UPDATED: Swap Colors for Top/Back Toggle (Top=Blue, Back=Red) ---
             const toggleHtml = `
                 <div class="spin-row">
                     <span class="spin-label">Rotation:</span>
@@ -211,9 +207,7 @@ function renderEditor() {
                              onclick="window.handleTypeToggle(${stepIndex}, ${optIndex}, 'back')">BACK</div>
                     </div>
                 </div>`;
-            // ---------------------------------------------------------------------
 
-            // NOTE: 'Drop' and 'Speed' use onchange to prevent re-rendering while typing negative numbers or clearing input
             const inputsHtml = `
                 <div class="editor-grid">
                     <div class="editor-field">
@@ -558,44 +552,13 @@ window.handleTestBall = async (stepIdx, optIdx) => {
     catch (e) { console.error(e); showToast("Test Failed"); }
 };
 
-window.handleTestCombo = async () => {
+window.handleTestCombo = () => {
     if (!bleState.isConnected) { showToast("Device not connected"); return; }
     if (!tempDrillData || tempDrillData.length === 0) return;
-    const balls = [];
-    tempDrillData.forEach(stepOptions => {
-        if (stepOptions[0][6] === 0) return;
-        const chosen = stepOptions[0]; 
-        const d = [...chosen];
-        
-        // --- SCATTER LOGIC FOR TEST COMBO ---
-        const scatter = d[10] || 0;
-        if (scatter > 0) {
-            const currentDrop = d[3];
-            const minDrop = currentDrop - scatter;
-            const maxDrop = currentDrop + scatter;
-            const span = maxDrop - minDrop;
-            const steps = Math.floor(span / 0.5);
-            if (steps > 0) {
-                 const randomStep = Math.floor(Math.random() * (steps + 1));
-                 d[3] = clamp(minDrop + (randomStep * 0.5), -10, 10);
-            }
-        }
-        
-        balls.push(packBall(d[0], d[1], d[2], d[3], d[4], 1));
-    });
-    if (balls.length === 0) { showToast("No active balls"); return; }
-    const totalLen = 7 + (balls.length * 24);
-    const buffer = new ArrayBuffer(totalLen);
-    const view = new DataView(buffer);
-    const uint8 = new Uint8Array(buffer);
-    view.setUint8(0, 0x81); view.setUint16(1, 4 + (balls.length * 24), true); 
-    view.setUint8(3, 1);
-    view.setUint16(4, 1, true); 
-    view.setUint8(6, 0);
-    let offset = 7;
-    balls.forEach(b => { uint8.set(b, offset); offset += 24; });
-    try { await sendPacket(uint8); showToast("Testing Drill..."); } 
-    catch (e) { console.error(e); showToast("Test Failed"); }
+
+    // Use the Runner for Infinite Test Mode
+    const isRandom = document.getElementById('chk-drill-random')?.checked || false;
+    startTestRun(tempDrillData, isRandom);
 };
 
 window.handleShareDrill = async () => {
