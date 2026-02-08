@@ -121,7 +121,7 @@
 
     <div class="footer-row">
         <div id="stats-display">Balls: 0 | Drills: 0</div>
-        <div>Version 2.3a</div>
+        <div>Version 2.3b</div>
     </div>
     
     <div id="log" class="log-box"></div>
@@ -179,6 +179,15 @@
                 <button id="btn-pause" class="btn-run-ctrl btn-pause" onclick="togglePause()">PAUSE</button>
                 <button class="btn-run-ctrl btn-stop-run" onclick="stopRun()">STOP</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<div id="test-overlay" class="modal-overlay">
+    <div class="modal" style="background: var(--surface); width: 90%; max-width:450px; padding: 40px 20px; text-align:center;">
+        <div id="test-ui">
+            <div style="font-size:1.4rem; font-weight:800; color:var(--text); margin-bottom:30px; letter-spacing:1px;">TESTING DRILL</div>
+            <button class="btn-run-ctrl btn-stop-run" onclick="stopRun()">STOP</button>
         </div>
     </div>
 </div>
