@@ -419,9 +419,9 @@ window.performSaveAs = () => {
     if (!/^[a-zA-Z0-9.\-#\[\]><\+\)\( ]+$/.test(newName)) { showToast("Invalid characters"); return; }
 
     const targetCat = selectedSaveCat;
-    if (userCustomDrills[targetCat].length >= 20) { 
-        showToast("That bank is full (Max 20)!"); return; 
-    }
+    if (userCustomDrills[targetCat].length >= 100) { 
+            showToast("That bank is full (Max 100)!"); return; 
+        }
 
     const catChar = targetCat.split('-')[1].toUpperCase(); 
     const newKey = `cust_${catChar}_${newName.replace(/\s+/g, '_')}_${Date.now()}`;
